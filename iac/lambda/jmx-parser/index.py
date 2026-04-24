@@ -51,6 +51,8 @@ def lambda_handler(event, context):
     
     try:
         test_script = event.get('testScript')
+        test_id = event.get('testId')
+        execute = event.get('execute', True)
         config_bucket = event.get('configBucket')
         property_overrides = event.get('jmeterProperties', {})
         
@@ -65,10 +67,18 @@ def lambda_handler(event, context):
         # Parse JMX
         config = parse_jmx(jmx_content, property_overrides)
         
-        print(f"✅ Parsed configuration: {json.dumps(config, indent=2)}")
+        # Merge parsed config with original test metadata
+        result = {
+            'testId': test_id,
+            'testScript': test_script,
+            'execute': execute,
+            **config  # Spread the parsed config (threads, duration, etc.)
+        }
         
-        # Return data directly for Step Functions (not API Gateway format)
-        return config
+        print(f"✅ Parsed configuration: {json.dumps(result, indent=2)}")
+        
+        # Return merged data for Step Functions
+        return result
         
     except Exception as e:
         print(f"❌ Error parsing JMX: {str(e)}")
