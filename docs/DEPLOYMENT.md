@@ -200,7 +200,9 @@ docker push ACCOUNT-ID.dkr.ecr.us-east-1.amazonaws.com/jmeter-batch:latest
 
 ---
 
-### Step 4: Setup GitHub Actions (Optional)
+### Step 4: Setup GitHub Actions (Optional but Recommended)
+
+The workflow is now configured to use **OIDC authentication** for enhanced security (no long-lived access keys).
 
 #### Configure AWS OIDC Provider
 
@@ -212,8 +214,11 @@ aws iam create-open-id-connect-provider \
   --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
 ```
 
-2. Create IAM role for GitHub Actions:
-```json
+**Note:** If you get "EntityAlreadyExists" error, the provider already exists - skip to step 2.
+
+2. Create IAM role trust policy file:
+```bash
+cat > github-actions-trust-policy.json <<'EOF'
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -228,23 +233,90 @@ aws iam create-open-id-connect-provider \
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         },
         "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:YOUR-ORG/YOUR-REPO:*"
+          "token.actions.githubusercontent.com:sub": "repo:YOUR-GITHUB-USERNAME/jmeter-batch-framework:*"
         }
       }
     }
   ]
 }
+EOF
+
+# Replace placeholders
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+sed -i "s/ACCOUNT-ID/$AWS_ACCOUNT_ID/g" github-actions-trust-policy.json
+# Manually replace YOUR-GITHUB-USERNAME with your GitHub username
+
+# Create the role
+aws iam create-role \
+  --role-name GitHubActionsJMeterRole \
+  --assume-role-policy-document file://github-actions-trust-policy.json
 ```
 
-3. Attach policies to role:
-- AmazonEC2ContainerRegistryFullAccess
-- AWSCloudFormationFullAccess
-- Custom policy for CDK deployment
+3. Attach required policies to role:
+```bash
+# ECR access
+aws iam attach-role-policy \
+  --role-name GitHubActionsJMeterRole \
+  --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
 
-#### Add GitHub Secrets
+# CloudFormation access
+aws iam attach-role-policy \
+  --role-name GitHubActionsJMeterRole \
+  --policy-arn arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
+
+# Step Functions access
+aws iam attach-role-policy \
+  --role-name GitHubActionsJMeterRole \
+  --policy-arn arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess
+
+# Additional permissions (S3, Lambda, Batch, etc.)
+cat > github-actions-permissions.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:*",
+        "lambda:*",
+        "batch:*",
+        "ec2:*",
+        "iam:*",
+        "logs:*",
+        "ssm:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+
+aws iam put-role-policy \
+  --role-name GitHubActionsJMeterRole \
+  --policy-name GitHubActionsAdditionalPermissions \
+  --policy-document file://github-actions-permissions.json
 ```
-AWS_ROLE_ARN: arn:aws:iam::ACCOUNT-ID:role/GitHubActionsRole
+
+#### Add GitHub Secret
+
+1. Get the role ARN:
+```bash
+aws iam get-role --role-name GitHubActionsJMeterRole --query Role.Arn --output text
 ```
+
+2. Add to GitHub repository:
+   - Go to Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `AWS_ROLE_ARN`
+   - Value: The ARN from step 1
+
+**Security Benefits:**
+- ✅ No long-lived AWS access keys
+- ✅ Temporary credentials (1-hour expiration)
+- ✅ Cannot be leaked from GitHub
+- ✅ Fine-grained repository access control
+
+For detailed GitHub Actions setup, see [GITHUB_ACTIONS_SETUP.md](../GITHUB_ACTIONS_SETUP.md)
 
 ---
 

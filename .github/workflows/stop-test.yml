@@ -1,0 +1,295 @@
+name: Stop JMeter Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      execution_name:
+        description: 'Execution name to stop (e.g., test-20260425-012345-123)'
+        required: false
+        default: ''
+      execution_arn:
+        description: 'Full execution ARN (alternative to execution name)'
+        required: false
+        default: ''
+      stop_all:
+        description: 'Stop all running executions'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      cleanup_batch_jobs:
+        description: 'Also terminate AWS Batch jobs'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  stop-jmeter-test:
+    name: Stop JMeter Test
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Get Stack Outputs
+        id: get-outputs
+        run: |
+          STATE_MACHINE=$(aws cloudformation describe-stacks \
+            --stack-name JMeterBatchStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
+            --output text)
+          
+          echo "state_machine=$STATE_MACHINE" >> $GITHUB_OUTPUT
+          echo "⚙️  State Machine: $STATE_MACHINE"
+      
+      - name: List running executions
+        id: list-executions
+        if: github.event.inputs.execution_name == '' && github.event.inputs.execution_arn == ''
+        run: |
+          STATE_MACHINE="${{ steps.get-outputs.outputs.state_machine }}"
+          
+          echo "🔍 Listing running executions..."
+          echo ""
+          
+          RUNNING_EXECUTIONS=$(aws stepfunctions list-executions \
+            --state-machine-arn $STATE_MACHINE \
+            --status-filter RUNNING \
+            --output json)
+          
+          COUNT=$(echo $RUNNING_EXECUTIONS | jq '.executions | length')
+          
+          if [ "$COUNT" -eq 0 ]; then
+            echo "✅ No running executions found"
+            echo "has_running=false" >> $GITHUB_OUTPUT
+          else
+            echo "📋 Found $COUNT running execution(s):"
+            echo ""
+            echo $RUNNING_EXECUTIONS | jq -r '.executions[] | "  - \(.name) (started: \(.startDate))"'
+            echo ""
+            echo "has_running=true" >> $GITHUB_OUTPUT
+            echo "count=$COUNT" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "$RUNNING_EXECUTIONS" > running-executions.json
+      
+      - name: Validate inputs
+        id: validate
+        run: |
+          EXECUTION_NAME="${{ github.event.inputs.execution_name }}"
+          EXECUTION_ARN="${{ github.event.inputs.execution_arn }}"
+          STOP_ALL="${{ github.event.inputs.stop_all }}"
+          
+          if [ "$STOP_ALL" = "true" ]; then
+            echo "mode=stop_all" >> $GITHUB_OUTPUT
+            echo "⚠️  Mode: Stop ALL running executions"
+          elif [ ! -z "$EXECUTION_ARN" ]; then
+            echo "mode=by_arn" >> $GITHUB_OUTPUT
+            echo "execution_arn=$EXECUTION_ARN" >> $GITHUB_OUTPUT
+            echo "🎯 Mode: Stop specific execution by ARN"
+          elif [ ! -z "$EXECUTION_NAME" ]; then
+            STATE_MACHINE="${{ steps.get-outputs.outputs.state_machine }}"
+            FULL_ARN="$STATE_MACHINE:$EXECUTION_NAME"
+            # Replace :stateMachine: with :execution:
+            EXECUTION_ARN=$(echo $FULL_ARN | sed 's/:stateMachine:/:execution:/')
+            echo "mode=by_name" >> $GITHUB_OUTPUT
+            echo "execution_arn=$EXECUTION_ARN" >> $GITHUB_OUTPUT
+            echo "🎯 Mode: Stop specific execution by name"
+          else
+            echo "❌ Error: Must provide execution_name, execution_arn, or set stop_all=true"
+            exit 1
+          fi
+      
+      - name: Stop specific execution
+        if: steps.validate.outputs.mode == 'by_name' || steps.validate.outputs.mode == 'by_arn'
+        id: stop-one
+        run: |
+          EXECUTION_ARN="${{ steps.validate.outputs.execution_arn }}"
+          
+          echo "🛑 Stopping execution..."
+          echo "ARN: $EXECUTION_ARN"
+          echo ""
+          
+          # Check current status
+          CURRENT_STATUS=$(aws stepfunctions describe-execution \
+            --execution-arn $EXECUTION_ARN \
+            --query 'status' \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+          
+          if [ "$CURRENT_STATUS" = "NOT_FOUND" ]; then
+            echo "❌ Execution not found"
+            exit 1
+          elif [ "$CURRENT_STATUS" != "RUNNING" ]; then
+            echo "⚠️  Execution is not running (status: $CURRENT_STATUS)"
+            echo "Nothing to stop"
+            exit 0
+          fi
+          
+          # Stop the execution
+          aws stepfunctions stop-execution \
+            --execution-arn $EXECUTION_ARN \
+            --error "ManualStop" \
+            --cause "Stopped via GitHub Actions workflow"
+          
+          echo "✅ Stop command sent"
+          echo ""
+          
+          # Wait for confirmation
+          echo "⏳ Waiting for execution to abort..."
+          sleep 5
+          
+          FINAL_STATUS=$(aws stepfunctions describe-execution \
+            --execution-arn $EXECUTION_ARN \
+            --query 'status' \
+            --output text)
+          
+          echo "Final status: $FINAL_STATUS"
+          
+          if [ "$FINAL_STATUS" = "ABORTED" ]; then
+            echo "✅ Execution successfully stopped"
+          else
+            echo "⚠️  Execution status is $FINAL_STATUS (expected ABORTED)"
+          fi
+          
+          echo "stopped_count=1" >> $GITHUB_OUTPUT
+      
+      - name: Stop all executions
+        if: steps.validate.outputs.mode == 'stop_all'
+        id: stop-all
+        run: |
+          STATE_MACHINE="${{ steps.get-outputs.outputs.state_machine }}"
+          
+          if [ ! -f running-executions.json ]; then
+            echo "⚠️  No running executions list found"
+            echo "stopped_count=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          EXECUTIONS=$(cat running-executions.json | jq -r '.executions[].executionArn')
+          COUNT=$(echo "$EXECUTIONS" | wc -l)
+          
+          if [ -z "$EXECUTIONS" ] || [ "$COUNT" -eq 0 ]; then
+            echo "✅ No running executions to stop"
+            echo "stopped_count=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "🛑 Stopping $COUNT execution(s)..."
+          echo ""
+          
+          STOPPED=0
+          while IFS= read -r EXECUTION_ARN; do
+            if [ ! -z "$EXECUTION_ARN" ]; then
+              EXEC_NAME=$(basename $EXECUTION_ARN)
+              echo "Stopping: $EXEC_NAME"
+              
+              aws stepfunctions stop-execution \
+                --execution-arn $EXECUTION_ARN \
+                --error "ManualStopAll" \
+                --cause "Stopped all executions via GitHub Actions workflow" \
+                2>/dev/null && STOPPED=$((STOPPED + 1)) || echo "  ⚠️  Failed to stop"
+            fi
+          done <<< "$EXECUTIONS"
+          
+          echo ""
+          echo "✅ Stopped $STOPPED execution(s)"
+          echo "stopped_count=$STOPPED" >> $GITHUB_OUTPUT
+          
+          # Wait for confirmations
+          sleep 5
+      
+      - name: Cleanup AWS Batch jobs
+        if: github.event.inputs.cleanup_batch_jobs == 'true'
+        run: |
+          echo "🧹 Cleaning up AWS Batch jobs..."
+          echo ""
+          
+          # Get job queue name from CloudFormation
+          JOB_QUEUE=$(aws cloudformation describe-stacks \
+            --stack-name JMeterBatchStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`JobQueueName`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -z "$JOB_QUEUE" ]; then
+            echo "⚠️  Job queue not found in stack outputs, trying default name..."
+            JOB_QUEUE="JMeterBatchQueue"
+          fi
+          
+          echo "Job Queue: $JOB_QUEUE"
+          echo ""
+          
+          # List running and runnable jobs
+          for STATUS in RUNNING RUNNABLE STARTING; do
+            echo "Checking $STATUS jobs..."
+            
+            JOBS=$(aws batch list-jobs \
+              --job-queue $JOB_QUEUE \
+              --job-status $STATUS \
+              --query 'jobSummaryList[].jobId' \
+              --output text 2>/dev/null || echo "")
+            
+            if [ ! -z "$JOBS" ]; then
+              for JOB_ID in $JOBS; do
+                echo "  Terminating job: $JOB_ID"
+                aws batch terminate-job \
+                  --job-id $JOB_ID \
+                  --reason "Stopped via GitHub Actions workflow" \
+                  2>/dev/null || echo "    ⚠️  Failed to terminate"
+              done
+            fi
+          done
+          
+          echo ""
+          echo "✅ Batch job cleanup complete"
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🛑 Stop JMeter Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          MODE="${{ steps.validate.outputs.mode }}"
+          
+          if [ "$MODE" = "stop_all" ]; then
+            STOPPED="${{ steps.stop-all.outputs.stopped_count }}"
+            echo "**Mode:** Stop all executions" >> $GITHUB_STEP_SUMMARY
+            echo "**Stopped:** $STOPPED execution(s)" >> $GITHUB_STEP_SUMMARY
+          elif [ "$MODE" = "by_name" ] || [ "$MODE" = "by_arn" ]; then
+            STOPPED="${{ steps.stop-one.outputs.stopped_count }}"
+            echo "**Mode:** Stop specific execution" >> $GITHUB_STEP_SUMMARY
+            echo "**Execution ARN:** \`${{ steps.validate.outputs.execution_arn }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** Stopped" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.cleanup_batch_jobs }}" = "true" ]; then
+            echo "**Batch Jobs:** Cleaned up ✅" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Batch Jobs:** Not cleaned up (jobs may continue running)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [Step Functions Console](https://console.aws.amazon.com/states/home?region=${{ env.AWS_REGION }}#/statemachines/details/${{ steps.get-outputs.outputs.state_machine }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Batch Console](https://console.aws.amazon.com/batch/home?region=${{ env.AWS_REGION }}#jobs)" >> $GITHUB_STEP_SUMMARY
+          echo "- [CloudWatch Logs](https://console.aws.amazon.com/cloudwatch/home?region=${{ env.AWS_REGION }}#logsV2:log-groups)" >> $GITHUB_STEP_SUMMARY

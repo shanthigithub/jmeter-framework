@@ -67,45 +67,148 @@ gh repo create jmeter-batch-framework --private --source=. --remote=origin --pus
 
 ---
 
-## Step 2: Add GitHub Secrets
+## Step 2: Configure AWS OIDC Authentication (Secure, No Access Keys!)
 
-Your workflow needs AWS credentials to work.
+Your workflow uses OpenID Connect (OIDC) for secure authentication - **no long-lived AWS access keys needed!**
 
-### 2.1 Go to GitHub Repository Settings
+### 2.1 Create AWS OIDC Provider (One-Time Setup)
 
-1. Open your repository: `https://github.com/YOUR-USERNAME/jmeter-batch-framework`
+Run this command to create the GitHub OIDC provider in AWS:
+
+```bash
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+```
+
+**Note:** If you get "EntityAlreadyExists" error, the provider already exists - skip to 2.2.
+
+### 2.2 Create IAM Role for GitHub Actions
+
+Create a file named `github-actions-trust-policy.json`:
+
+```bash
+cat > github-actions-trust-policy.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::ACCOUNT-ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:YOUR-GITHUB-USERNAME/jmeter-batch-framework:*"
+        }
+      }
+    }
+  ]
+}
+EOF
+```
+
+**Replace in the file above:**
+- `ACCOUNT-ID` with your AWS account ID (run `aws sts get-caller-identity --query Account --output text`)
+- `YOUR-GITHUB-USERNAME` with your GitHub username
+
+Then create the IAM role:
+
+```bash
+# Get your AWS account ID
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# Replace ACCOUNT-ID in the trust policy file
+sed -i "s/ACCOUNT-ID/$AWS_ACCOUNT_ID/g" github-actions-trust-policy.json
+
+# Create the IAM role
+aws iam create-role \
+  --role-name GitHubActionsJMeterRole \
+  --assume-role-policy-document file://github-actions-trust-policy.json \
+  --description "Role for GitHub Actions to deploy JMeter framework"
+```
+
+### 2.3 Attach Required Policies to the Role
+
+```bash
+# Allow ECR access (for Docker image push)
+aws iam attach-role-policy \
+  --role-name GitHubActionsJMeterRole \
+  --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+
+# Allow CloudFormation access (for CDK deployment)
+aws iam attach-role-policy \
+  --role-name GitHubActionsJMeterRole \
+  --policy-arn arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
+
+# Allow Step Functions execution
+aws iam attach-role-policy \
+  --role-name GitHubActionsJMeterRole \
+  --policy-arn arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess
+
+# Create custom policy for additional permissions
+cat > github-actions-permissions.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:*",
+        "lambda:*",
+        "batch:*",
+        "ec2:*",
+        "iam:*",
+        "logs:*",
+        "ssm:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+
+aws iam put-role-policy \
+  --role-name GitHubActionsJMeterRole \
+  --policy-name GitHubActionsAdditionalPermissions \
+  --policy-document file://github-actions-permissions.json
+```
+
+### 2.4 Add GitHub Secret
+
+Get the role ARN and add it to GitHub:
+
+```bash
+# Get the role ARN
+aws iam get-role --role-name GitHubActionsJMeterRole --query Role.Arn --output text
+```
+
+**Now add to GitHub:**
+
+1. Go to your repository: `https://github.com/YOUR-USERNAME/jmeter-batch-framework`
 2. Click **Settings** tab
 3. Click **Secrets and variables** → **Actions**
 4. Click **New repository secret**
+5. Add the secret:
+   - **Name:** `AWS_ROLE_ARN`
+   - **Value:** The ARN from the command above (e.g., `arn:aws:iam::123456789012:role/GitHubActionsJMeterRole`)
 
-### 2.2 Add These 3 Secrets:
+### 2.5 Verify Setup
 
-#### Secret 1: AWS_ACCESS_KEY_ID
-- **Name:** `AWS_ACCESS_KEY_ID`
-- **Value:** Your AWS Access Key ID
-  ```
-  Get from: cat ~/.aws/credentials
-  Look for: aws_access_key_id = AKIA...
-  ```
+After adding the secret, you should see:
+- ✅ AWS_ROLE_ARN
 
-#### Secret 2: AWS_SECRET_ACCESS_KEY
-- **Name:** `AWS_SECRET_ACCESS_KEY`
-- **Value:** Your AWS Secret Access Key
-  ```
-  Get from: cat ~/.aws/credentials
-  Look for: aws_secret_access_key = ...
-  ```
-
-#### Secret 3: AWS_REGION
-- **Name:** `AWS_REGION`
-- **Value:** `us-east-1`
-
-### 2.3 Verify Secrets
-
-After adding all 3, you should see:
-- ✅ AWS_ACCESS_KEY_ID
-- ✅ AWS_SECRET_ACCESS_KEY
-- ✅ AWS_REGION
+**Security Benefits:**
+- ✅ No long-lived AWS access keys
+- ✅ Temporary credentials (expire after 1 hour)
+- ✅ Can't be leaked or stolen from GitHub
+- ✅ Fine-grained access control per repository
+- ✅ Automatic credential rotation
 
 ---
 

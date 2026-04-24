@@ -1,0 +1,227 @@
+name: Run JMeter Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_config:
+        description: 'Test configuration file in S3 (e.g., test-suite.json)'
+        required: false
+        default: 'test-suite.json'
+      test_id:
+        description: 'Specific test ID to run (leave empty to run all)'
+        required: false
+        default: ''
+      wait_for_completion:
+        description: 'Wait for test to complete'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  run-jmeter-test:
+    name: Run JMeter Test
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
+    
+    outputs:
+      execution_arn: ${{ steps.start-execution.outputs.execution_arn }}
+      execution_name: ${{ steps.start-execution.outputs.execution_name }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Get Stack Outputs
+        id: get-outputs
+        run: |
+          CONFIG_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name JMeterBatchStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ConfigBucketName`].OutputValue' \
+            --output text)
+          
+          RESULTS_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name JMeterBatchStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ResultsBucketName`].OutputValue' \
+            --output text)
+          
+          STATE_MACHINE=$(aws cloudformation describe-stacks \
+            --stack-name JMeterBatchStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
+            --output text)
+          
+          echo "config_bucket=$CONFIG_BUCKET" >> $GITHUB_OUTPUT
+          echo "results_bucket=$RESULTS_BUCKET" >> $GITHUB_OUTPUT
+          echo "state_machine=$STATE_MACHINE" >> $GITHUB_OUTPUT
+          
+          echo "📦 Config Bucket: $CONFIG_BUCKET"
+          echo "📊 Results Bucket: $RESULTS_BUCKET"
+          echo "⚙️  State Machine: $STATE_MACHINE"
+      
+      - name: Upload test configuration (if using example)
+        if: github.event.inputs.test_config == 'test-suite.json'
+        run: |
+          CONFIG_BUCKET="${{ steps.get-outputs.outputs.config_bucket }}"
+          
+          if [ -f "examples/test-suite.json" ]; then
+            echo "📤 Uploading examples/test-suite.json to S3..."
+            aws s3 cp examples/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
+            echo "✅ Configuration uploaded"
+          else
+            echo "⚠️  examples/test-suite.json not found, assuming it's already in S3"
+          fi
+      
+      - name: Start Step Functions execution
+        id: start-execution
+        run: |
+          STATE_MACHINE="${{ steps.get-outputs.outputs.state_machine }}"
+          CONFIG_KEY="${{ github.event.inputs.test_config }}"
+          TEST_ID="${{ github.event.inputs.test_id }}"
+          
+          # Create execution name with timestamp
+          EXECUTION_NAME="test-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_NUMBER}"
+          
+          # Build input JSON
+          if [ -z "$TEST_ID" ]; then
+            INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\"}"
+          else
+            INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\", \"testId\": \"$TEST_ID\"}"
+          fi
+          
+          echo "🚀 Starting execution: $EXECUTION_NAME"
+          echo "📋 Input: $INPUT_JSON"
+          
+          EXECUTION_ARN=$(aws stepfunctions start-execution \
+            --state-machine-arn $STATE_MACHINE \
+            --name $EXECUTION_NAME \
+            --input "$INPUT_JSON" \
+            --query 'executionArn' \
+            --output text)
+          
+          echo "execution_arn=$EXECUTION_ARN" >> $GITHUB_OUTPUT
+          echo "execution_name=$EXECUTION_NAME" >> $GITHUB_OUTPUT
+          
+          echo "✅ Execution started!"
+          echo "🔗 ARN: $EXECUTION_ARN"
+          echo ""
+          echo "📍 View in AWS Console:"
+          echo "https://console.aws.amazon.com/states/home?region=${{ env.AWS_REGION }}#/executions/details/$EXECUTION_ARN"
+      
+      - name: Monitor execution
+        if: github.event.inputs.wait_for_completion == 'true'
+        run: |
+          EXECUTION_ARN="${{ steps.start-execution.outputs.execution_arn }}"
+          
+          echo "⏳ Monitoring execution status..."
+          echo "Press Ctrl+C to stop monitoring (test will continue running)"
+          echo ""
+          
+          START_TIME=$(date +%s)
+          
+          while true; do
+            RESPONSE=$(aws stepfunctions describe-execution \
+              --execution-arn $EXECUTION_ARN \
+              --output json)
+            
+            STATUS=$(echo $RESPONSE | jq -r '.status')
+            
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+            ELAPSED_MIN=$((ELAPSED / 60))
+            ELAPSED_SEC=$((ELAPSED % 60))
+            
+            echo "[${ELAPSED_MIN}m ${ELAPSED_SEC}s] Status: $STATUS"
+            
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo ""
+              echo "✅ Execution completed successfully!"
+              
+              # Get output
+              OUTPUT=$(echo $RESPONSE | jq -r '.output // empty')
+              if [ ! -z "$OUTPUT" ]; then
+                echo ""
+                echo "📊 Execution Output:"
+                echo "$OUTPUT" | jq '.'
+              fi
+              
+              break
+            elif [ "$STATUS" = "FAILED" ]; then
+              echo ""
+              echo "❌ Execution failed!"
+              
+              # Get error details
+              ERROR=$(echo $RESPONSE | jq -r '.error // empty')
+              CAUSE=$(echo $RESPONSE | jq -r '.cause // empty')
+              
+              if [ ! -z "$ERROR" ]; then
+                echo "Error: $ERROR"
+              fi
+              if [ ! -z "$CAUSE" ]; then
+                echo "Cause: $CAUSE"
+              fi
+              
+              exit 1
+            elif [ "$STATUS" = "TIMED_OUT" ]; then
+              echo ""
+              echo "⏱️  Execution timed out!"
+              exit 1
+            elif [ "$STATUS" = "ABORTED" ]; then
+              echo ""
+              echo "🛑 Execution was aborted!"
+              exit 1
+            fi
+            
+            sleep 15
+          done
+      
+      - name: Get results location
+        if: github.event.inputs.wait_for_completion == 'true'
+        run: |
+          RESULTS_BUCKET="${{ steps.get-outputs.outputs.results_bucket }}"
+          EXECUTION_NAME="${{ steps.start-execution.outputs.execution_name }}"
+          
+          echo ""
+          echo "📊 Test Results Location:"
+          echo "s3://$RESULTS_BUCKET/$EXECUTION_NAME/"
+          echo ""
+          echo "📥 Download results:"
+          echo "aws s3 sync s3://$RESULTS_BUCKET/$EXECUTION_NAME/ ./results/"
+          echo ""
+          echo "📈 View logs:"
+          echo "aws logs tail /aws/stepfunctions/JMeterBatchStateMachine --follow"
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🧪 JMeter Test Execution" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Execution:** \`${{ steps.start-execution.outputs.execution_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Configuration:** \`${{ github.event.inputs.test_config }}\`" >> $GITHUB_STEP_SUMMARY
+          
+          if [ ! -z "${{ github.event.inputs.test_id }}" ]; then
+            echo "**Test ID:** \`${{ github.event.inputs.test_id }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Execution](${{ env.CONSOLE_URL }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [CloudWatch Logs](https://console.aws.amazon.com/cloudwatch/home?region=${{ env.AWS_REGION }}#logsV2:log-groups/log-group/%2Faws%2Fstepfunctions%2FJMeterBatchStateMachine)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Results Bucket](https://s3.console.aws.amazon.com/s3/buckets/${{ steps.get-outputs.outputs.results_bucket }}?region=${{ env.AWS_REGION }})" >> $GITHUB_STEP_SUMMARY
+        env:
+          CONSOLE_URL: https://console.aws.amazon.com/states/home?region=${{ env.AWS_REGION }}#/executions/details/${{ steps.start-execution.outputs.execution_arn }}
