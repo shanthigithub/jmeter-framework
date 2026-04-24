@@ -1,0 +1,43 @@
+# JMeter Test Files (stored in S3, not GitHub)
+tests/*.jmx
+data/*.csv
+data/*.txt
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AWS CDK
+iac/cdk.out/
+iac/node_modules/
+iac/.cdk.staging/
+
+# Temporary files
+*.log
+*.tmp
+*.bak
+
+# AWS credentials (never commit)
+.aws/
+credentials
+*.pem
+*.key
+
+# Build artifacts
+dist/
+build/
+*.pyc
+__pycache__/
+
+# Local test results
+results/
+*.jtl
+*.xml
+
+# Git ignore for uploaded files
+github-actions-trust-policy.json
+github-actions-permissions.json
