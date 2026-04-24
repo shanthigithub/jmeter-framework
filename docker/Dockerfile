@@ -13,7 +13,7 @@ RUN apk add --no-cache \
     bash \
     python3 \
     py3-pip \
-    && pip3 install --no-cache-dir awscli
+    && pip3 install --break-system-packages --no-cache-dir awscli
 
 # Download and install JMeter
 RUN mkdir /opt/jmeter \
