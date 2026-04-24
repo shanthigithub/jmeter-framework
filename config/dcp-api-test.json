@@ -1,9 +1,7 @@
 {
   "testSuite": [
     {
-      "testId": "dcp-api-may-v2",
-      "testScript": "tests/DCP_API_May_v2.jmx",
-      "execute": true
+      "testScript": "tests/DCP_API_May_v2.jmx"
     }
   ]
 }

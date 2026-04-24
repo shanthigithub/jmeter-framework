@@ -53,14 +53,29 @@ def lambda_handler(event, context):
         if not isinstance(test_suite, list):
             raise ValueError("'testSuite' must be a list")
         
-        # Validate each test
+        # Validate and enrich each test
         for idx, test in enumerate(test_suite):
-            required_fields = ['testId', 'testScript', 'numOfContainers', 'threads', 'duration', 'execute']
-            for field in required_fields:
-                if field not in test:
-                    raise ValueError(f"Test {idx} missing required field: {field}")
+            # Only testScript is required
+            if 'testScript' not in test:
+                raise ValueError(f"Test {idx} missing required field: testScript")
+            
+            # Auto-generate testId from script name if not provided
+            if 'testId' not in test:
+                script_name = test['testScript']
+                # Extract filename without path and extension
+                # e.g., "tests/DCP_API_May_v2.jmx" -> "dcp-api-may-v2"
+                test_id = script_name.split('/')[-1].replace('.jmx', '').replace('_', '-').lower()
+                test['testId'] = test_id
+                print(f"  Auto-generated testId: {test_id} from {script_name}")
+            
+            # Default execute to true if not provided
+            if 'execute' not in test:
+                test['execute'] = True
+            
+            # Note: numOfContainers, threads, duration will be auto-extracted by JMX Parser
+            # They are optional in the config and will be added later in the pipeline
         
-        executable_tests = [t for t in test_suite if t.get('execute', False)]
+        executable_tests = [t for t in test_suite if t.get('execute', True)]
         
         print(f"✅ Config loaded: {len(test_suite)} tests, {len(executable_tests)} executable")
         
