@@ -162,7 +162,7 @@ export class JMeterBatchStack extends cdk.Stack {
 
     lambdaRole.addToPolicy(new iam.PolicyStatement({
       sid: 'BatchSubmitJob',
-      actions: ['batch:SubmitJob'],
+      actions: ['batch:SubmitJob', 'batch:TagResource'],
       resources: ['*'],  // Will be scoped to job definition after creation
     }));
 
