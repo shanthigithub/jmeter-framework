@@ -90,8 +90,8 @@ jobs:
           
           if [ -f "config/$CONFIG_FILE" ]; then
             echo "📤 Uploading config/$CONFIG_FILE to S3..."
-            aws s3 cp config/$CONFIG_FILE s3://$CONFIG_BUCKET/$CONFIG_FILE
-            echo "✅ Configuration uploaded: s3://$CONFIG_BUCKET/$CONFIG_FILE"
+            aws s3 cp config/$CONFIG_FILE s3://$CONFIG_BUCKET/config/$CONFIG_FILE
+            echo "✅ Configuration uploaded: s3://$CONFIG_BUCKET/config/$CONFIG_FILE"
             echo "::notice::✅ Configuration uploaded successfully"
           else
             echo "⚠️  config/$CONFIG_FILE not found, assuming it's already in S3"
@@ -104,7 +104,7 @@ jobs:
         run: |
           echo "::group::Starting Step Functions execution"
           STATE_MACHINE="${{ steps.get-outputs.outputs.state_machine }}"
-          CONFIG_KEY="${{ github.event.inputs.test_config }}"
+          CONFIG_KEY="config/${{ github.event.inputs.test_config }}"
           TEST_ID="${{ github.event.inputs.test_id }}"
           
           # Create execution name with timestamp
