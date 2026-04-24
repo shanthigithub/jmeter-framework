@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       test_config:
-        description: 'Test configuration file in S3 (e.g., test-suite.json)'
-        required: false
-        default: 'test-suite.json'
+        description: 'Test configuration file'
+        required: true
+        default: 'dcp-api-test.json'
+        type: choice
+        options:
+          - 'dcp-api-test.json'
+          - 'test-suite.json'
       test_id:
         description: 'Specific test ID to run (leave empty to run all)'
         required: false
@@ -72,17 +76,17 @@ jobs:
           echo "📊 Results Bucket: $RESULTS_BUCKET"
           echo "⚙️  State Machine: $STATE_MACHINE"
       
-      - name: Upload test configuration (if using example)
-        if: github.event.inputs.test_config == 'test-suite.json'
+      - name: Upload test configuration
         run: |
           CONFIG_BUCKET="${{ steps.get-outputs.outputs.config_bucket }}"
+          CONFIG_FILE="${{ github.event.inputs.test_config }}"
           
-          if [ -f "config/test-suite.json" ]; then
-            echo "📤 Uploading config/test-suite.json to S3..."
-            aws s3 cp config/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
-            echo "✅ Configuration uploaded"
+          if [ -f "config/$CONFIG_FILE" ]; then
+            echo "📤 Uploading config/$CONFIG_FILE to S3..."
+            aws s3 cp config/$CONFIG_FILE s3://$CONFIG_BUCKET/$CONFIG_FILE
+            echo "✅ Configuration uploaded: s3://$CONFIG_BUCKET/$CONFIG_FILE"
           else
-            echo "⚠️  config/test-suite.json not found, assuming it's already in S3"
+            echo "⚠️  config/$CONFIG_FILE not found, assuming it's already in S3"
           fi
       
       - name: Start Step Functions execution
