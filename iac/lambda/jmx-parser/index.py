@@ -178,7 +178,10 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     # Apply overrides
     jmeter_properties.update(property_overrides)
     
-    return {
+    # Auto-detect CSV data files referenced in JMX
+    data_files = extract_csv_data_files(root)
+    
+    result = {
         'threads': num_threads,
         'duration': duration,
         'iterations': iterations,
@@ -192,6 +195,13 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
             'estimatedDurationSeconds': parse_duration_to_seconds(duration) if duration else None
         }
     }
+    
+    # Add dataFiles only if CSV files were found
+    if data_files:
+        result['dataFiles'] = data_files
+        print(f"📄 Auto-detected {len(data_files)} CSV data file(s): {data_files}")
+    
+    return result
 
 
 def find_all_thread_groups(root: ET.Element) -> list:
@@ -362,3 +372,40 @@ def extract_properties(root: ET.Element) -> Dict[str, Any]:
                         properties[name] = value
     
     return properties
+
+
+def extract_csv_data_files(root: ET.Element) -> list:
+    """
+    Auto-detect CSV data files referenced in JMX file.
+    
+    Looks for CSV Data Set Config elements and extracts the filename.
+    Normalizes paths to use the data/ folder convention.
+    """
+    
+    csv_files = []
+    seen_files = set()
+    
+    # Look for CSV Data Set Config elements
+    for elem in root.iter():
+        if elem.get('testclass') == 'CSVDataSet':
+            # Extract filename
+            filename = get_element_value(elem, 'stringProp', 'filename', default='')
+            
+            if filename:
+                # Normalize path - extract just the filename
+                # Handles: "data/users.csv", "./users.csv", "users.csv", "/path/to/users.csv"
+                base_filename = os.path.basename(filename)
+                
+                # Prepend data/ folder if not already there
+                if not filename.startswith('data/'):
+                    normalized_path = f"data/{base_filename}"
+                else:
+                    normalized_path = filename
+                
+                # Avoid duplicates
+                if normalized_path not in seen_files:
+                    csv_files.append(normalized_path)
+                    seen_files.add(normalized_path)
+                    print(f"  📄 Found CSV Data Set: {filename} → {normalized_path}")
+    
+    return csv_files
