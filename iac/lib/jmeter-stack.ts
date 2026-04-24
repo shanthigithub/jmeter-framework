@@ -409,6 +409,33 @@ export class JMeterBatchStack extends cdk.Stack {
       },
     });
 
+    // Task: Parse JMX files to extract configuration
+    const parseJmxTask = new sfn.Map(this, 'ParseJMX', {
+      itemsPath: '$.tests',
+      resultPath: '$.testsWithConfig',
+      maxConcurrency: 5,
+    }).iterator(
+      new tasks.LambdaInvoke(this, 'ParseJMXFile', {
+        lambdaFunction: jmxParser.function,
+        payload: sfn.TaskInput.fromObject({
+          'testScript.$': '$.testScript',
+          'testId.$': '$.testId',
+          'execute.$': '$.execute',
+        }),
+        resultSelector: {
+          'Payload.$': '$.Payload',
+        },
+      })
+    );
+
+    // Transform parsed results back to tests array
+    const transformParsedTests = new sfn.Pass(this, 'TransformParsedTests', {
+      parameters: {
+        'tests.$': '$.testsWithConfig[*].Payload',
+        'runId.$': '$.runId',
+      },
+    });
+
     // Task: Partition Data (optional - only if dataFiles exist)
     const partitionDataTask = new tasks.LambdaInvoke(this, 'PartitionData', {
       lambdaFunction: partitionDataFn,
@@ -465,10 +492,12 @@ export class JMeterBatchStack extends cdk.Stack {
     checkJobsTask.next(jobsDoneChoice);
     mergeResultsTask.next(successState);
 
-    // Define workflow - start from readConfig and go to checkJobs
+    // Define workflow - now includes JMX parsing step
     // (checkJobsTask already connected to jobsDoneChoice above)
     const definition = readConfigTask
       .next(filterTestsTask)
+      .next(parseJmxTask)
+      .next(transformParsedTests)
       .next(partitionDataTask)
       .next(submitJobsTask)
       .next(checkJobsTask);
