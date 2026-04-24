@@ -1,0 +1,297 @@
+name: TruffleHog Secret Scan
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      full_scan:
+        description: 'Full scan — every commit on every branch (slow, use after history rewrites)'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  trufflehog:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      security-events: write   # required for GitHub Security tab (SARIF upload)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      # Fetch all remote branches so full_scan can reach every commit
+      - name: Fetch all branches
+        if: github.event.inputs.full_scan == 'true'
+        run: git fetch --all --tags
+
+      - name: Determine scan range
+        id: range
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.full_scan }}" == "true" ]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "mode=delta" >> "$GITHUB_OUTPUT"
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
+            echo "mode=delta" >> "$GITHUB_OUTPUT"
+            echo "base=${{ github.sha }}^" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=delta" >> "$GITHUB_OUTPUT"
+            echo "base=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install TruffleHog
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+            | sh -s -- -b /usr/local/bin
+          trufflehog --version
+
+      # Run scan — always produces trufflehog-report.json regardless of findings
+      # --no-update          : skip detector update network call (faster, deterministic in CI)
+      # --exclude-detectors Box : Box detector generates false positives from Adobe mbox/
+      #   tracking session IDs (32-char hex) captured in JMeter HTTP Cookie headers.
+      #   All Box findings in this repo are unverified false positives.
+      #
+      # full_scan mode: iterates every remote branch, scans its complete history,
+      #   then deduplicates findings by (detector, raw, commit, file, line) so commits
+      #   reachable from multiple branches are only reported once.
+      - name: Run TruffleHog scan
+        id: scan
+        shell: bash
+        run: |
+          set +e
+
+          TH_VERSION=$(trufflehog --version 2>&1 | head -1)
+          TRUFFLEHOG_FLAGS="--no-update --exclude-detectors Box --json --results=verified,unknown"
+          SCAN_START=$(date +%s)
+
+          if [ "${{ steps.range.outputs.mode }}" == "full" ]; then
+            RAW_FILE="trufflehog-raw.json"
+            touch "$RAW_FILE"
+
+            # Collect all remote branch names
+            BRANCHES=$(git branch -r | grep -v '\->' | sed 's|origin/||')
+            BRANCH_COUNT=$(echo "$BRANCHES" | wc -l | tr -d ' ')
+
+            # Count commits and unique files across all branches
+            COMMIT_COUNT=$(git log --all --oneline | wc -l | tr -d ' ')
+            FILE_COUNT=$(git log --all --name-only --format="" | sort -u | grep -v '^$' | wc -l | tr -d ' ')
+
+            # Enumerate every remote branch and scan its full history
+            echo "$BRANCHES" | while read -r branch; do
+              echo "Scanning branch: $branch"
+              trufflehog git file://. \
+                --branch "$branch" \
+                $TRUFFLEHOG_FLAGS \
+                2>/dev/null >> "$RAW_FILE"
+            done
+
+            # Deduplicate: same detector+raw value+commit+file+line may appear from
+            # multiple branches when a commit is reachable from more than one branch
+            python3 - <<'PYEOF'
+          import json
+
+          seen = set()
+          with open("trufflehog-raw.json") as f_in, open("trufflehog-report.json", "w") as f_out:
+              for line in f_in:
+                  line = line.strip()
+                  if not line:
+                      continue
+                  try:
+                      d = json.loads(line)
+                      git = d.get("SourceMetadata", {}).get("Data", {}).get("Git", {})
+                      key = (
+                          d.get("DetectorName"),
+                          d.get("Raw"),
+                          git.get("commit"),
+                          git.get("file"),
+                          str(git.get("line")),
+                      )
+                      if key not in seen:
+                          seen.add(key)
+                          f_out.write(line + "\n")
+                  except Exception:
+                      pass
+          PYEOF
+
+          else
+            # Count commits and unique files in the delta range
+            BRANCH_COUNT=1
+            COMMIT_COUNT=$(git log --oneline "${{ steps.range.outputs.base }}..${{ steps.range.outputs.head }}" 2>/dev/null | wc -l | tr -d ' ')
+            FILE_COUNT=$(git log --name-only --format="" "${{ steps.range.outputs.base }}..${{ steps.range.outputs.head }}" 2>/dev/null | sort -u | grep -v '^$' | wc -l | tr -d ' ')
+
+            # Delta scan: only commits between base and head
+            trufflehog git \
+              file://. \
+              --since-commit "${{ steps.range.outputs.base }}" \
+              --branch "${{ steps.range.outputs.head }}" \
+              $TRUFFLEHOG_FLAGS \
+              2>/dev/null | tee trufflehog-report.json
+          fi
+
+          SCAN_END=$(date +%s)
+          SCAN_DURATION=$(( SCAN_END - SCAN_START ))
+
+          # Ensure file always exists for downstream steps
+          touch trufflehog-report.json
+
+          VERIFIED=$(jq -r 'select(.Verified == true)'   trufflehog-report.json | jq -s 'length')
+          UNVERIFIED=$(jq -r 'select(.Verified == false)' trufflehog-report.json | jq -s 'length')
+          TOTAL=$(jq -s 'length' trufflehog-report.json)
+
+          # Unique detectors that fired
+          DETECTORS=$(jq -r '.DetectorName' trufflehog-report.json | sort -u | tr '\n' ', ' | sed 's/,$//')
+          [ -z "$DETECTORS" ] && DETECTORS="none"
+
+          # Top 5 files by finding count
+          TOP_FILES=$(jq -r '.SourceMetadata.Data.Git.file' trufflehog-report.json | sort | uniq -c | sort -rn | head -5 | awk '{print "  - "$2" ("$1" findings)"}')
+
+          echo "verified=${VERIFIED}"           >> "$GITHUB_OUTPUT"
+          echo "unverified=${UNVERIFIED}"       >> "$GITHUB_OUTPUT"
+          echo "total=${TOTAL}"                 >> "$GITHUB_OUTPUT"
+          echo "commits=${COMMIT_COUNT}"        >> "$GITHUB_OUTPUT"
+          echo "files=${FILE_COUNT}"            >> "$GITHUB_OUTPUT"
+          echo "duration=${SCAN_DURATION}"      >> "$GITHUB_OUTPUT"
+
+          SCAN_MODE="${{ steps.range.outputs.mode }}"
+
+          {
+            echo "### TruffleHog Scan Results"
+            echo ""
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| Scan mode | \`${SCAN_MODE}\` |"
+            echo "| TruffleHog version | \`${TH_VERSION}\` |"
+            echo "| Branches scanned | ${BRANCH_COUNT} |"
+            echo "| Commits scanned | ${COMMIT_COUNT} |"
+            echo "| Files scanned | ${FILE_COUNT} |"
+            echo "| Scan duration | ${SCAN_DURATION}s |"
+            echo ""
+            echo "#### Findings"
+            echo ""
+            echo "| Type | Count |"
+            echo "|------|-------|"
+            echo "| 🔴 Verified secrets | ${VERIFIED} |"
+            echo "| 🟡 Unverified findings | ${UNVERIFIED} |"
+            echo "| **Total** | **${TOTAL}** |"
+            echo ""
+            echo "**Detectors triggered:** ${DETECTORS}"
+            if [ "${TOTAL}" -gt "0" ] && [ -n "$TOP_FILES" ]; then
+              echo ""
+              echo "**Top files by finding count:**"
+              echo "$TOP_FILES"
+            fi
+            if [ "${VERIFIED}" -gt "0" ]; then
+              echo ""
+              echo "> ⛔ **Build failed — verified secrets found. Rotate credentials immediately.**"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${VERIFIED}" -gt "0" ]; then
+            echo "secrets_found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "secrets_found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Convert JSON → SARIF for GitHub Security tab
+      - name: Convert to SARIF
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'EOF'
+          import json
+
+          with open("trufflehog-report.json") as f:
+              lines = [l.strip() for l in f if l.strip()]
+
+          findings = [json.loads(l) for l in lines] if lines else []
+
+          results = []
+          for f in findings:
+              git = f.get("SourceMetadata", {}).get("Data", {}).get("Git", {})
+              file_path = git.get("file", "unknown")
+              line      = git.get("line", 1) or 1
+              detector  = f.get("DetectorName", "Unknown")
+              verified  = f.get("Verified", False)
+              results.append({
+                  "ruleId": detector,
+                  "level":  "error" if verified else "warning",
+                  "message": {"text": f"{'[VERIFIED] ' if verified else '[UNVERIFIED] '}Potential secret detected by {detector}"},
+                  "locations": [{
+                      "physicalLocation": {
+                          "artifactLocation": {"uri": file_path, "uriBaseId": "%SRCROOT%"},
+                          "region": {"startLine": int(line)}
+                      }
+                  }]
+              })
+
+          sarif = {
+              "version": "2.1.0",
+              "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+              "runs": [{
+                  "tool": {
+                      "driver": {
+                          "name": "TruffleHog",
+                          "version": "3.x",
+                          "informationUri": "https://github.com/trufflesecurity/trufflehog",
+                          "rules": []
+                      }
+                  },
+                  "results": results
+              }]
+          }
+
+          with open("trufflehog.sarif", "w") as out:
+              json.dump(sarif, out, indent=2)
+
+          print(f"SARIF written: {len(results)} findings")
+          EOF
+
+      # SARIF upload requires GitHub Advanced Security on private repos.
+      # continue-on-error prevents a permissions/licensing failure from blocking the build.
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        continue-on-error: true          # fix: don't fail build if GHAS not enabled
+        uses: github/codeql-action/upload-sarif@v4.34.1
+        with:
+          sarif_file: trufflehog.sarif
+          category: trufflehog
+
+      - name: Upload JSON report as artifact
+        if: always()
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: trufflehog-report-${{ github.run_number }}
+          path: |
+            trufflehog-report.json
+            trufflehog.sarif
+          retention-days: 30
+
+      # Only fail the build when the scan itself finds verified secrets
+      - name: Fail build if verified secrets found
+        if: steps.scan.outputs.secrets_found == 'true'
+        run: |
+          echo "Verified secrets were detected. See the uploaded report artifact."
+          exit 1
+
+      # Only notify Teams when secrets are actually found — not on infra errors
+      - name: MS Teams Notify on secret found
+        if: steps.scan.outputs.secrets_found == 'true'
+        uses: tr/cicd_gh-actions-notification/teams@v2.5
+        with:
+          WEBHOOK_URL1: ${{ secrets.MS_TEAMS_PE_DEVX_HOOK }}

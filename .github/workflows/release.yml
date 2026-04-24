@@ -1,0 +1,99 @@
+#Template Version 1.1.0
+
+name: Release
+
+on:
+  # COMMENT for manually releasing versions
+  workflow_run:
+    workflows: [CI]
+    types:
+      - completed
+    branches:
+      - dev
+  # UNCOMMENT for manually releasing versions
+  workflow_dispatch:
+
+env:
+  ENV_CONFIG_FILE: "./.github/actions.txt"
+  RELEASES_TO_KEEP: 3
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # COMMENT condition for manually releasing versions
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      # Check out repo at latest commit
+      - name: Checkout Git Repo
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+              
+      - uses: release-drafter/release-drafter@v7.1.1
+        id: release-status
+        with:
+          publish: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set environment variables defined in the ENV_CONFIG_FILE
+        shell: sh
+        run: |
+          cat ${{ env.ENV_CONFIG_FILE }} >> $GITHUB_ENV
+
+      - name: Delete Older Releases (keep latest 3 releases)
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        with:
+          keep_latest: ${{ env.RELEASES_TO_KEEP }}
+          delete_tags: true          
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v6.0.2 
+        if: ${{ success() }} && ${{ steps.release-status.outcome != 'success' || steps.release-status.outcome != 'success' }} 
+        with:
+          ref: ${{ steps.status.outputs.branch }}
+
+      - name: Prepare environment
+        if: ${{ success() }} && ${{ steps.release-status.outcome != 'success' || steps.release-status.outcome != 'success' }}   
+        id: status
+        run: |
+          # FRAMEWORK_VERSION=$(gh release view --repo tr/cp_jmeter --json tagName | jq -r '.tagName')
+          # # Output values to be used by other steps
+          # echo "FRAMEWORK_VERSION=${FRAMEWORK_VERSION}" >> $GITHUB_ENV
+          echo "path=${{ env.BADGE_PATH }}" >> $GITHUB_ENV
+          echo "branch=${{ env.BRANCH }}" >> $GITHUB_ENV
+          mkdir -p badges
+        env:
+          BADGE_PATH: badges/test-badge.svg
+          BRANCH: badges
+          
+      - name: Generate the Framework Version badge SVG image
+        if: ${{ success() }} && ${{ steps.release-status.outcome != 'success' || steps.release-status.outcome != 'success' }}     
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'Framework Version'
+          status:  $(gh release view --repo tr/cp_jmeter --json tagName | jq -r '.tagName')
+          path: badges/framework-version.svg
+          color: 'green' 
+          
+      - name: Commit badge
+        if: ${{ success() }} && ${{ steps.release-status.outcome != 'success' || steps.release-status.outcome != 'success' }}    
+        continue-on-error: true
+        env:
+          BADGE: ${{ steps.status.outputs.path }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add badges/framework-version.svg
+          git commit -m "Add/Update badge"
+          
+      - name: Push badge commit
+        uses: ad-m/github-push-action@v1.0.0
+        if: ${{ success() }} && ${{ steps.release-status.outcome != 'success' || steps.release-status.outcome != 'success' }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.status.outputs.branch }}
+
+

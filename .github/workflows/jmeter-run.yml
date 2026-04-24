@@ -1,0 +1,90 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Run Single JMeter Test Suite
+run-name: Run ${{ inputs.test-suite }} by @${{ github.actor }} on ${{ inputs.environment }}
+on:
+  workflow_dispatch:
+    inputs:
+      test-suite:
+        description: 'Select Test Suite'
+        required: true
+        type: choice
+        options:
+            # AUTO-GENERATED:test-suite-options:start
+            - BoomiTestsuite.json
+            - InviteAdminTest.json
+            - Region_code.json
+            - TestSuite_CPSP_CICD_Run.json
+            - TestSuite_CPSP_CICD_Run01.json
+            - TestSuite_CPSP_CICD_Run02.json
+            - demo.json
+            - dry-run.json
+            - subresult.json
+            - testSuite.json
+            - testSuite1.json
+            - testSuite_1ranjan.json
+            - testSuite_Boomi.json
+            - testSuite_DCP.json
+            - testSuite_MultiTestGroups.json
+            - testSuite_Rambabu.json
+            - testSuite_SSP.json
+            - testSuite_SimpleTableServer_1.json
+            - testSuite_SimpleTableServer_2.json
+            - testSuite_Trials_and_Commerce_API.json
+            - testSuite_Trials_and_Commerce_TTI.json
+            - testSuite_UI.json
+            - testSuite_UI_Kiran.json
+            - testSuite_UI_Pavan.json
+            - testSuite_UI_Unconference_Demo.json
+            - testSuite_UI_kiran2.json
+            - testSuite_WebDriver_Dry.json
+            - testSuite_debug.json
+            - testSuite_demo.json
+            - testSuite_demo_1.json
+            - testSuite_demo_Pavan.json
+            - testSuite_demo_SSP.json
+            - testSuite_help_center.json
+            - testSuite_help_center_browser.json
+            - testSuite_multi-thread-group.json
+            - testSuite_wds_1.json
+            - testsuite_Ranjan.json
+            # AUTO-GENERATED:test-suite-options:end
+      browser:
+        description: 'Select Browser'
+        required: false
+        type: choice
+        default: 'firefox'
+        options:
+           - 'chrome'
+           - 'edge'
+           - 'firefox'
+           - 'NA'         
+      thread-duration:
+        description: 'Enter Thread Duration in Seconds'
+        required: false
+        type: 'string'
+      environment:
+        description: 'Select Environment'
+        required: true
+        type: choice
+        default: 'QA'
+        options:
+           - 'QA'
+           - 'CICD'
+jobs: 
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Run reusable github action for jmeter state machine
+        uses: ./.github/actions/jmeter-action
+        with: 
+          test-suite: ${{ github.event.inputs.test-suite }}
+          aws-access-key-id: ${{ secrets.A208591_ROBOT_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.A208591_ROBOT_AWS_SECRET_ACCESS_KEY }}
+          browser: ${{ github.event.inputs.browser }}
+          thread-duration: ${{ github.event.inputs.thread-duration }}
+          environment: ${{ github.event.inputs.environment }}
+

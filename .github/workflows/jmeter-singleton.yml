@@ -1,0 +1,47 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Run a Single JMeter Test Case
+run-name: Run ${{ inputs.jmx-script-name }} by @${{ github.actor }}
+on:
+  workflow_dispatch:
+    inputs:
+      jmx-script-name:
+        description: 'Enter JMeter Script Name'
+        required: true
+      num-of-containers:
+        description: 'Enter Number of Containers'
+        required: true
+        default: "1"
+      browser:
+        description: 'Select Browser'
+        required: false
+        type: choice
+        default: 'firefox'
+        options:
+           - 'chrome'
+           - 'edge'
+           - 'firefox'
+           - 'NA'
+      thread-duration:
+        description: 'Enter Thread Duration in Seconds'
+        required: false
+        type: 'string'        
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Run reusable github action for jmeter state machine
+        uses: ./.github/actions/jmeter-singleton
+        with: 
+          jmx-script-name: ${{ github.event.inputs.jmx-script-name }}
+          num-of-containers: ${{ inputs.num-of-containers }}
+          aws-access-key-id: ${{ secrets.A208591_ROBOT_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.A208591_ROBOT_AWS_SECRET_ACCESS_KEY }}
+          browser: ${{ github.event.inputs.browser }}
+          thread-duration: ${{ github.event.inputs.thread-duration }}
+
+
+

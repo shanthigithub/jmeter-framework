@@ -1,0 +1,16 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Stop JMeter Test
+run-name: Stop JMeter Test by @${{ github.actor }}
+on:
+  workflow_dispatch:
+jobs: 
+  build:
+    runs-on: codebuild-cp_jmeter-${{ github.run_id }}-${{ github.run_attempt }}-ubuntu-7.0-large
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Run reusable github action for jmeter state machine
+        uses: ./.github/actions/jmeter-stop
+

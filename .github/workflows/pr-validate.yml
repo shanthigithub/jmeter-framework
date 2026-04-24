@@ -1,0 +1,234 @@
+name: PR Validate
+
+on:
+  workflow_dispatch: 
+  pull_request:
+    types: [opened, reopened]
+    branches:
+      - main
+      - '**'
+      - '!badges'      
+env:
+  ENV_CONFIG_FILE: "./.github/actions.txt"
+jobs:
+  iac:
+    name: Build IaC
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Use Node.js
+        uses: actions/setup-node@v6.3.0
+        with:
+          node-version: 'latest'
+          cache: npm
+          cache-dependency-path: iac/package-lock.json
+
+      - name: Install CDK
+        run: |
+          npm install -g aws-cdk
+
+      - name: Set default environment variables defined in the ENV_CONFIG_FILE (To start With)
+        shell: bash
+        run: |
+          cat ${{ env.ENV_CONFIG_FILE }} >> $GITHUB_ENV     
+
+      - name: Setup TR CDK
+        working-directory: cicd
+        shell: bash
+        env:
+          ARTIFACTORY_USERNAME: ${{ secrets[env.ARTIFACTORY_USERNAME_SECRET_NAME] }}
+          ARTIFACTORY_TOKEN: ${{ secrets[env.ARTIFACTORY_TOKEN_SECRET_NAME] }}
+        run: |
+          echo "export PATH=$PATH:$(npm get prefix)/bin" >> ~/.bashrc
+          chmod +x ./setup-tr-cdk.sh
+          bash ./setup-tr-cdk.sh
+
+      - name: Install Dependencies
+        working-directory: iac
+        run: |
+          yarn
+
+      - name: Validate and CDK Synth
+        working-directory: cicd
+        shell: bash
+        run: |
+          chmod +x ./auto-synth.sh
+          bash ./auto-synth.sh
+
+      - name: Test for potential mistakes that could break framework
+        id: pr-status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          bash ./test/validate.sh
+
+      - name: remove JFROG Creds
+        if: always()
+        shell: bash
+        run: rm -rf ~/.npmrc
+
+      # Get current banch name to use it as dest directory
+      - name: Extract branch name
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}         
+        shell: bash
+        run: echo "branch=${GITHUB_REF#refs/heads/}" >> "${GITHUB_OUTPUT}"
+        id: extract_branch
+
+      - name: Prepare environment
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}   
+        id: status
+        run: |
+          # Output values to be used by other steps
+          echo "path=${BADGE_PATH}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${BRANCH}" >> "${GITHUB_OUTPUT}"
+        env:
+          BADGE_PATH: badges/test-badge.svg
+          BRANCH: badges
+
+      - uses: actions/checkout@v6.0.2 
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }} 
+        continue-on-error: true
+        with:
+          ref: ${{ steps.status.outputs.branch }}
+
+      # Create the directory where badges will be saved, if needed
+      - name: Create destination directory
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}          
+        env:
+          BADGE_PATH: ${{ steps.status.outputs.path }}
+        run: mkdir -p "${BADGE_PATH%/*}"
+
+      # Use the output from the `PR Status` step
+      - name: Generate the PR Status badge SVG image
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}  
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'PR Validation'
+          status: ${{ steps.pr-status.outputs.PR_STATUS }}
+          path: ${{ steps.status.outputs.path }}
+          color: ${{ steps.pr-status.outputs.PR_STATUS == 'passing' && 'green' || 'red' }}        
+
+      # Use the output from the `PR Status` step
+      - name: Generate the Total JMeter Scripts badge SVG image
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}     
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'JMeter Scripts'
+          status: ${{ steps.pr-status.outputs.TOTAL_SCRIPTS }}
+          path: badges/total-scripts.svg
+          color: 'green'
+      - name: Generate the Total Python Scripts badge SVG image
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}     
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'Python Scripts'
+          status: ${{ steps.pr-status.outputs.TOTAL_PYTHON_SCRIPTS }}
+          path: badges/total-python-scripts.svg
+          color: 'green'
+      # Use the output from the `PR Status` step
+      - name: Generate the Total MicroServices badge SVG image
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}           
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'MicroServices Onboarded'
+          status: ${{ steps.pr-status.outputs.TOTAL_MICRO_SERVICES }}
+          path: badges/total-micro-services.svg
+          color: 'green'
+
+      - name: Generate the GH Pages badge SVG image
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'GitHub Pages'
+          status: 'Click Here'
+          path: badges/gh-pages-link.svg
+          color: 'green'
+
+      - name: Generate the DD Custom Metrics badge SVG image
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}         
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'DataDog JMeter Metrics'
+          status: 'Click Here'
+          path: badges/dd-metrics-link.svg
+          color: 'green'
+      - name: Generate the DD Custom Dashboard badge SVG image
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}         
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'DataDog JMeter Dashboard'
+          status: 'Click Here'
+          path: badges/dd-metrics-dashboard.svg
+          color: 'green'
+      - name: Generate the Wiki badge SVG image
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }} 
+        uses: emibcn/badge-action@v2.0.3
+        with:
+          label: 'Wiki'
+          status: 'Click Here'
+          path: badges/wiki-link.svg
+          color: 'green'          
+      - name: Commit badge
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}    
+        continue-on-error: true
+        env:
+          BADGE: ${{ steps.status.outputs.path }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add "${BADGE}"
+          git add badges/total-scripts.svg
+          git add badges/total-python-scripts.svg       
+          git add badges/total-micro-services.svg
+          git add badges/gh-pages-link.svg
+          git add badges/dd-metrics-link.svg
+          git add badges/wiki-link.svg
+          git commit -m "Add/Update badge"
+          
+      - name: Push badge commit
+        uses: ad-m/github-push-action@v1.0.0
+        if: ${{ success() }} && ${{ steps.pr-status.outcome != 'success' || steps.pr-status.outcome != 'success' }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.status.outputs.branch }}
+
+      - name: Identify Changed Files
+        uses: dorny/paths-filter@v4.0.1
+        id: filter
+        with:
+          list-files: shell
+          filters: |
+            project-config:
+              - added|modified|deleted: 'project-config/**'
+
+      - name: Identify MicroServiceName Changed
+        if: ${{ steps.filter.outputs.project-config == 'true' }}
+        run: |
+          for filter in "${{ steps.filter.outputs.project-config  }}"
+          do
+            dirname $filter | sed -e 's|environments/QA||g' -e 's|jmeter/testPlans||g' -e 's|jmeter||g' >> changed-dirnames.txt
+          done;
+          cat changed-dirnames.txt | sort | uniq -u >> new-changed-dirnames.txt
+          LENGTH=$( cat new-changed-dirnames.txt | wc -l )
+          if [[ "$LENGTH" == 1 ]];
+          then
+              TRIGGER_PROJECT_PATH=$(cat new-changed-dirnames.txt | wc -l)
+              MAIN_FOLDER_CHANGED=$(echo $TRIGGER_PROJECT_PATH | awk -F '/' '{print $1;}' )
+              if [[ "$MAIN_FOLDER_CHANGED" == "project-config" ]];
+              then
+                  TRIGGER_PROJECT_PATH=$(cat new-changed-dirnames.txt | wc -l)
+                  echo "TRIGGER_PROJECT_PATH=$TRIGGER_PROJECT_PATH" >> $GITHUB_ENV
+                  cat $TRIGGER_PROJECT_PATH/environments/QA/actions.txt >> $GITHUB_ENV
+              fi;
+          fi;
+
+      - name: MS Teams Notify
+        if: always()
+        continue-on-error: true
+        uses: tr/cicd_gh-actions-notification/teams@v1.6
+        with:
+          WEBHOOK_URL6: ${{ secrets.MS_TEAMS_PE_DEVX_HOOK }}
+          WEBHOOK_TYPE: "TEAMS"

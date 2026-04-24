@@ -1,0 +1,263 @@
+name: CICD
+
+on:
+  push:
+    branches:
+      - 'dev'
+      - '!badges'
+      - gmtest-branch
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - '**.jpg'
+      - '**.png'
+    tags-ignore:
+      - '**'
+  #Run workflow manually for building and releasing on non-main branches such as development or hotfix branches.
+  workflow_dispatch:
+    inputs:
+      buildType:
+        description: Type of build/release
+        required: true
+        type: choice
+        options:
+        - dev
+        - hotfix
+
+env:
+  # Define git user email and name to be used for git commit
+  GIT_USER_EMAIL: "actions@github.com"
+  GIT_USER_NAME: "GitHub Actions"
+  CODE_COV_THRESHOLD: 80
+  ENV_CONFIG_FILE: "./.github/actions.txt"
+
+
+jobs:
+
+  s3-sync:
+    runs-on: codebuild-cp_jmeter-${{ github.run_id }}-${{ github.run_attempt }}-linux-5.0-medium
+    steps:
+      - name: Checkout Git Repo
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 1  # Shallow clone for faster checkout
+
+      - uses: dorny/paths-filter@v4.0.1
+        id: filter
+        with:
+          filters: |
+            project-config:
+              - 'project-config/**'
+
+      - name: S3 Copy
+        if: ${{ steps.filter.outputs.project-config == 'true' }}
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          echo "Copy Project Config to S3 with acceleration"
+          aws configure set default.s3.use_accelerate_endpoint true
+          timeout 300 aws s3 sync ./project-config ${S3_BUCKET}/project-config \
+            --delete \
+            --only-show-errors \
+            --no-progress \
+            --exclude "*.md" || echo "S3 sync completed or timed out"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          S3_BUCKET: "s3://a208591-jmeter-performance-test-repo"
+          AWS_MAX_ATTEMPTS: 2
+          AWS_RETRY_MODE: adaptive
+
+  docker-push:
+    runs-on: codebuild-cp_jmeter-${{ github.run_id }}-${{ github.run_attempt }}-linux-5.0-2xlarge
+    steps:
+      - name: Checkout Git Repo
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 1  # Shallow clone for faster checkout
+
+      - uses: dorny/paths-filter@v4.0.1
+        id: filter
+        with:
+          filters: |
+            docker:
+              - 'iac/docker-assets/**'
+              - 'project-config/**'
+              - 'iac/lib/jmeter-run.sh'
+
+      - uses: jfrog/setup-jfrog-cli@v5.0.0
+        if: ${{ steps.filter.outputs.docker == 'true' }}
+        env:
+          JF_URL: "https://tr1.jfrog.io"
+          JF_USER: ${{ secrets.ARTIFACTORY_USER }}
+          JF_PASSWORD: ${{ secrets.ARTIFACTORY_TOKEN }}
+        with:
+          version: latest
+
+      - name: Set up Docker Buildx
+        if: ${{ steps.filter.outputs.docker == 'true' }}
+        uses: docker/setup-buildx-action@v4.0.0
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+          buildkitd-flags: --allow-insecure-entitlement network.host
+
+      - name: Configure AWS credentials for ECR caching
+        if: ${{ steps.filter.outputs.docker == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6.0.0
+        with:
+          aws-region: us-east-1
+
+      - name: Docker Build and Push
+        if: ${{ steps.filter.outputs.docker == 'true' }}
+        shell: bash
+        timeout-minutes: 15
+        run: |
+          echo "Building and pushing Docker images to ECR with layer caching"
+          timeout 900 bash ./ecr-push.sh || (echo "Build timeout or failed"; exit 1)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JF_USER: ${{ secrets.ARTIFACTORY_USER }}
+          JF_ACCESS_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
+          # Cache versions to avoid repeated API calls
+          DD_LISTENER_VERSION_VAR: v0.6.1
+          JMETER_VERSION_VAR: 5.6.3
+          SEL_VERSION_VAR: 4.15.0
+          COMMONS_IO_VERSION_VAR: 2.13.0
+
+  cdk-deploy:
+    runs-on: codebuild-cp_jmeter-${{ github.run_id }}-${{ github.run_attempt }}-linux-5.0-large
+    needs: docker-push  # Wait for Docker images to be in ECR before deploying CDK
+    if: false  # Temporarily disable CDK deployment until we optimize it to only deploy changed stacks
+    steps:
+      - name: Checkout Git Repo
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 1  # Shallow clone for faster checkout
+
+      - uses: dorny/paths-filter@v4.0.1
+        id: filter
+        with:
+          filters: |
+            cdk:
+              - 'iac/**'
+            docker:
+              - 'iac/docker-assets/**'
+              - 'project-config/**'
+              - 'iac/lib/jmeter-run.sh'
+            iam:
+              - 'iac/lib/iam-role.ts'
+            sg:
+              - 'iac/lib/sg-stack.ts'
+            ecs:
+              - 'iac/lib/ecs-stack.ts'
+            app:
+              - 'iac/lib/app-stack.ts'
+            s3:
+              - 'iac/lib/s3-stack.ts'
+
+      - name: Use Node.js
+        if: ${{ steps.filter.outputs.cdk == 'true' }}
+        uses: actions/setup-node@v6.3.0
+        with:
+          node-version: '24'
+          registry-url: 'https://tr1.jfrog.io/tr1/api/npm/npm/'
+
+      - name: Setup TR CDK & Install dependencies
+        if: ${{ steps.filter.outputs.cdk == 'true' }}
+        working-directory: iac
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          npm ci --no-audit
+          npm install -g aws-cdk
+
+      - name: Deploy IAM Stack
+        working-directory: iac
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ steps.filter.outputs.cdk == 'true' && steps.filter.outputs.iam == 'true' }}
+        shell: bash
+        run: |
+          cdk deploy JMeterIamRoleStack --require-approval never --concurrency 10
+
+      - name: Deploy Security Group Stack
+        working-directory: iac
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ steps.filter.outputs.cdk == 'true' && steps.filter.outputs.sg == 'true' }}
+        shell: bash
+        run: |
+          cdk deploy JMeterSecurityGroupStack --require-approval never --concurrency 10
+
+      - name: Deploy Load Gen Stacks (QA and CICD)
+        working-directory: iac
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ steps.filter.outputs.cdk == 'true' && steps.filter.outputs.ecs == 'true' }}
+        shell: bash
+        run: |
+          cdk deploy JMeterLoadGenStackQA JMeterLoadGenStackCICD --require-approval never --concurrency 10
+
+      - name: Deploy S3 / CloudFront Reports Site Stack
+        working-directory: iac
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ steps.filter.outputs.cdk == 'true' && steps.filter.outputs.s3 == 'true' }}
+        shell: bash
+        run: |
+          cdk deploy JMeterPerformanceTestS3Stack --require-approval never --concurrency 10
+
+      - name: Deploy Perf Test Stack
+        working-directory: iac
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ steps.filter.outputs.cdk == 'true' && (steps.filter.outputs.app == 'true' || steps.filter.outputs.docker == 'true') }}
+        shell: bash
+        run: |
+          cdk deploy JMeterPerfTestStack --require-approval never --concurrency 10
+
+  sync-workflow-options:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 1
+
+      - uses: dorny/paths-filter@v4.0.1
+        id: filter
+        with:
+          filters: |
+            testsuites:
+              - 'project-config/testSuites/**'
+
+      - name: Sync test-suite options
+        if: steps.filter.outputs.testsuites == 'true'
+        run: python .github/scripts/sync_workflow_options.py
+
+      - name: Create PR if workflow changed
+        if: steps.filter.outputs.testsuites == 'true'
+        uses: peter-evans/create-pull-request@v8.1.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: sync test-suite options in jmeter-run.yml"
+          title: "chore: sync test-suite options from project-config/testSuites"
+          body: |
+            Automatically generated by `sync_workflow_options.py`.
+
+            Updates the `test-suite` dropdown in `jmeter-run.yml` to match the current contents of `project-config/testSuites/`.
+          branch: chore/sync-workflow-options
+          base: dev
+          delete-branch: true
+          labels: automation
+
