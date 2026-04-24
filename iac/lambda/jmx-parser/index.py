@@ -67,18 +67,13 @@ def lambda_handler(event, context):
         
         print(f"✅ Parsed configuration: {json.dumps(config, indent=2)}")
         
-        return {
-            'statusCode': 200,
-            'body': config
-        }
+        # Return data directly for Step Functions (not API Gateway format)
+        return config
         
     except Exception as e:
         print(f"❌ Error parsing JMX: {str(e)}")
-        return {
-            'statusCode': 500,
-            'error': str(e),
-            'message': 'Failed to parse JMX file'
-        }
+        # Raise exception for Step Functions to catch
+        raise Exception(f"Failed to parse JMX file: {str(e)}")
 
 
 def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str, Any]:
