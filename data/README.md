@@ -19,7 +19,7 @@ CONFIG_BUCKET=$(aws cloudformation describe-stacks \
 aws s3 sync data/ s3://$CONFIG_BUCKET/data/
 ```
 
-4. **Reference in config** (`examples/test-suite.json`):
+4. **Reference in config** (`config/test-suite.json`):
 
 ```json
 {
@@ -52,3 +52,4 @@ CSV files are NOT committed to Git (see `.gitignore`). They must be uploaded to 
 ## 💡 Data Partitioning
 
 Large CSV files are automatically split across containers. Each container gets a portion of the data.
+

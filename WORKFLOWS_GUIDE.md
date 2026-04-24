@@ -109,7 +109,7 @@ After completion, the workflow provides:
 
 **Steps:**
 
-1. Create test configuration in `examples/test-suite.json`:
+1. Create test configuration in `config/test-suite.json`:
 ```json
 {
   "testSuite": [
@@ -472,3 +472,4 @@ aws s3 sync s3://RESULTS-BUCKET/EXECUTION-NAME/ ./results/
 ---
 
 **Need help?** Check the troubleshooting section or AWS Console logs for detailed error messages.
+

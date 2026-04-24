@@ -19,7 +19,7 @@ CONFIG_BUCKET=$(aws cloudformation describe-stacks \
 aws s3 sync tests/ s3://$CONFIG_BUCKET/tests/
 ```
 
-4. **Reference in config** (`examples/test-suite.json`):
+4. **Reference in config** (`config/test-suite.json`):
 
 ```json
 {
@@ -35,3 +35,4 @@ See [TEST_FILES_GUIDE.md](../TEST_FILES_GUIDE.md) for complete documentation.
 ## ⚠️ Note
 
 JMX files are NOT committed to Git (see `.gitignore`). They must be uploaded to S3.
+

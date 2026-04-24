@@ -1,0 +1,17 @@
+{
+  "testSuite": [
+    {
+      "testId": "dcp-api-may-v2",
+      "testScript": "tests/DCP_API_May_v2.jmx",
+      "numOfContainers": 1,
+      "threads": 10,
+      "duration": "5m",
+      "execute": true,
+      "jvmArgs": "-Xms512m -Xmx2g",
+      "jmeterProperties": {
+        "hostname": "your-api-hostname.com",
+        "protocol": "https"
+      }
+    }
+  ]
+}

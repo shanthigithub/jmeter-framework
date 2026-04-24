@@ -77,12 +77,12 @@ jobs:
         run: |
           CONFIG_BUCKET="${{ steps.get-outputs.outputs.config_bucket }}"
           
-          if [ -f "examples/test-suite.json" ]; then
-            echo "📤 Uploading examples/test-suite.json to S3..."
-            aws s3 cp examples/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
+          if [ -f "config/test-suite.json" ]; then
+            echo "📤 Uploading config/test-suite.json to S3..."
+            aws s3 cp config/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
             echo "✅ Configuration uploaded"
           else
-            echo "⚠️  examples/test-suite.json not found, assuming it's already in S3"
+            echo "⚠️  config/test-suite.json not found, assuming it's already in S3"
           fi
       
       - name: Start Step Functions execution

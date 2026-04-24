@@ -17,7 +17,7 @@ jmeter-batch-framework/
 │   ├── users.csv
 │   ├── products.csv
 │   └── ...
-├── examples/
+├── config/
 │   └── test-suite.json      # ← Test configuration
 └── ...
 ```
@@ -58,7 +58,7 @@ data/
 └── test-data.csv
 ```
 
-### 3. **Test Configuration** → `examples/test-suite.json`
+### 3. **Test Configuration** → `config/test-suite.json`
 
 Already exists - reference your files here:
 
@@ -122,7 +122,7 @@ aws s3 cp data/products.csv s3://YOUR-CONFIG-BUCKET/data/products.csv
 
 ```bash
 # Upload test suite configuration
-aws s3 cp examples/test-suite.json s3://YOUR-CONFIG-BUCKET/test-suite.json
+aws s3 cp config/test-suite.json s3://YOUR-CONFIG-BUCKET/test-suite.json
 ```
 
 ---
@@ -176,7 +176,7 @@ EOF
 
 ### 4. Update Test Configuration
 
-Edit `examples/test-suite.json`:
+Edit `config/test-suite.json`:
 
 ```json
 {
@@ -212,7 +212,7 @@ aws s3 sync tests/ s3://$CONFIG_BUCKET/tests/
 aws s3 sync data/ s3://$CONFIG_BUCKET/data/
 
 # Upload configuration
-aws s3 cp examples/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
+aws s3 cp config/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
 
 echo "✅ All files uploaded to s3://$CONFIG_BUCKET/"
 ```
@@ -316,10 +316,10 @@ nano tests/new-test.jmx
 aws s3 cp tests/new-test.jmx s3://$CONFIG_BUCKET/tests/new-test.jmx
 
 # 3. Update test-suite.json
-nano examples/test-suite.json
+nano config/test-suite.json
 
 # 4. Upload config
-aws s3 cp examples/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
+aws s3 cp config/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
 ```
 
 ---
@@ -382,7 +382,7 @@ aws s3 cp tests/api-load.jmx s3://$CONFIG_BUCKET/tests/api-load.jmx
 ### 1. **Version Control for Configs Only**
 
 **Store in GitHub:**
-- ✅ `examples/test-suite.json` (test configuration)
+- ✅ `config/test-suite.json` (test configuration)
 - ✅ `README.md`, documentation
 - ✅ Infrastructure code (CDK)
 
@@ -444,7 +444,7 @@ echo "Uploading to: $CONFIG_BUCKET"
 # Upload all test files
 aws s3 sync tests/ s3://$CONFIG_BUCKET/tests/ --delete
 aws s3 sync data/ s3://$CONFIG_BUCKET/data/ --delete
-aws s3 cp examples/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
+aws s3 cp config/test-suite.json s3://$CONFIG_BUCKET/test-suite.json
 
 echo "✅ Upload complete!"
 ```
@@ -469,7 +469,7 @@ ls -lh tests/
 ls -lh data/
 
 # View configuration
-cat examples/test-suite.json
+cat config/test-suite.json
 ```
 
 ### Check S3 Files
@@ -496,10 +496,10 @@ aws s3 ls s3://$CONFIG_BUCKET/ --recursive
 
 ```bash
 # Validate JSON
-cat examples/test-suite.json | jq .
+cat config/test-suite.json | jq .
 
 # Check test script references
-cat examples/test-suite.json | jq -r '.testSuite[].testScript'
+cat config/test-suite.json | jq -r '.testSuite[].testScript'
 ```
 
 ---
@@ -511,7 +511,7 @@ cat examples/test-suite.json | jq -r '.testSuite[].testScript'
 Local:                        S3:
 tests/                   →    s3://bucket/tests/
 data/                    →    s3://bucket/data/
-examples/test-suite.json →    s3://bucket/test-suite.json
+config/test-suite.json →    s3://bucket/test-suite.json
 ```
 
 ### Upload Commands
@@ -519,7 +519,7 @@ examples/test-suite.json →    s3://bucket/test-suite.json
 # Upload everything
 aws s3 sync tests/ s3://$CONFIG_BUCKET/tests/
 aws s3 sync data/ s3://$CONFIG_BUCKET/data/
-aws s3 cp examples/test-suite.json s3://$CONFIG_BUCKET/
+aws s3 cp config/test-suite.json s3://$CONFIG_BUCKET/
 
 # Upload single file
 aws s3 cp tests/my-test.jmx s3://$CONFIG_BUCKET/tests/
@@ -554,3 +554,4 @@ aws s3 sync s3://$CONFIG_BUCKET/tests/ tests/
 4. **Run tests:** Files are automatically downloaded by containers
 
 **Remember:** JMX files live in S3, not GitHub! 🚀
+
