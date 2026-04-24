@@ -265,6 +265,7 @@ What the system generates:
 - ✅ SetupThreadGroup  
 - ✅ PostThreadGroup
 - ✅ Blazemeter ConcurrencyThreadGroup
+- ✅ **Multiple Thread Groups** (aggregated automatically)
 
 ### Test Duration
 
@@ -481,7 +482,46 @@ The parser reads exactly what's in the JMX file.
 }
 ```
 
-### Example 3: With Overrides
+### Example 3: Multiple Thread Groups
+
+**Config:**
+```json
+{
+  "testSuite": [
+    {
+      "testScript": "tests/complex_test.jmx"
+    }
+  ]
+}
+```
+
+**JMX has:**
+- Thread Group 1: "API Users" - 50 threads, 5m duration
+- Thread Group 2: "Admin Users" - 10 threads, 5m duration  
+- Thread Group 3: "Background Jobs" - 20 threads, 100 iterations
+
+**Auto-Generated:**
+```json
+{
+  "threads": 80,
+  "duration": "5m",
+  "numOfContainers": 2,
+  "jvmArgs": "-Xms1g -Xmx3g",
+  "testDetails": {
+    "threadGroupName": "3 Thread Groups",
+    "rampTime": 30,
+    "scheduler": true
+  }
+}
+```
+
+**What Happened:**
+- ✅ Total threads: 50 + 10 + 20 = **80 threads**
+- ✅ Duration: max(5m, 5m, 16m40s) = **5m** (scheduler takes precedence)
+- ✅ Containers: 80 threads → **2 containers** (40 threads each)
+- ✅ Memory: 80 threads → **1g-3g** (medium load)
+
+### Example 4: With Overrides
 
 **Config:**
 ```json

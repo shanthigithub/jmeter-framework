@@ -86,50 +86,80 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     
     root = ET.fromstring(jmx_content)
     
-    # Find ThreadGroup element
-    thread_group = find_thread_group(root)
+    # Find ALL ThreadGroup elements
+    thread_groups = find_all_thread_groups(root)
     
-    if not thread_group:
+    if not thread_groups:
         raise ValueError("No ThreadGroup found in JMX file")
     
-    # Extract thread configuration
-    num_threads = get_element_value(thread_group, 'stringProp', 'ThreadGroup.num_threads', default='1')
-    num_threads = int(num_threads)
+    print(f"📊 Found {len(thread_groups)} thread group(s) in JMX")
     
-    # Check if scheduler is enabled (duration-based)
-    scheduler = get_element_value(thread_group, 'boolProp', 'ThreadGroup.scheduler', default='false')
-    use_scheduler = scheduler.lower() == 'true'
+    # Aggregate configuration from all thread groups
+    total_threads = 0
+    max_duration_seconds = 0
+    max_iterations = 0
+    max_ramp_time = 0
+    use_scheduler = False
+    thread_group_details = []
     
+    for i, thread_group in enumerate(thread_groups, 1):
+        tg_name = thread_group.get('testname', f'Thread Group {i}')
+        
+        # Extract thread count
+        tg_threads = get_element_value(thread_group, 'stringProp', 'ThreadGroup.num_threads', default='1')
+        tg_threads = int(tg_threads)
+        total_threads += tg_threads
+        
+        # Extract ramp-up time
+        tg_ramp = get_element_value(thread_group, 'stringProp', 'ThreadGroup.ramp_time', default='1')
+        tg_ramp = int(tg_ramp)
+        max_ramp_time = max(max_ramp_time, tg_ramp)
+        
+        # Check scheduler
+        tg_scheduler = get_element_value(thread_group, 'boolProp', 'ThreadGroup.scheduler', default='false')
+        tg_use_scheduler = tg_scheduler.lower() == 'true'
+        
+        if tg_use_scheduler:
+            use_scheduler = True
+            tg_duration = get_element_value(thread_group, 'stringProp', 'ThreadGroup.duration', default='300')
+            max_duration_seconds = max(max_duration_seconds, int(tg_duration))
+        else:
+            # Iteration-based
+            loop_count = get_element_value(thread_group, 'elementProp/stringProp', 'LoopController.loops', default='1')
+            continue_forever = get_element_value(thread_group, 'elementProp/boolProp', 'LoopController.continue_forever', default='false')
+            
+            if continue_forever.lower() != 'true' and loop_count != '-1':
+                tg_iterations = int(loop_count)
+                max_iterations = max(max_iterations, tg_iterations)
+        
+        thread_group_details.append({
+            'name': tg_name,
+            'threads': tg_threads,
+            'rampTime': tg_ramp,
+            'scheduler': tg_use_scheduler
+        })
+        
+        print(f"  └─ {tg_name}: {tg_threads} threads, ramp {tg_ramp}s")
+    
+    # Determine final duration/iterations
     duration = None
     iterations = None
     
-    if use_scheduler:
-        # Duration-based test
-        duration_seconds = get_element_value(thread_group, 'stringProp', 'ThreadGroup.duration', default='300')
-        duration = format_duration(int(duration_seconds))
+    if use_scheduler and max_duration_seconds > 0:
+        # At least one group uses scheduler - use max duration
+        duration = format_duration(max_duration_seconds)
+    elif max_iterations > 0:
+        # Iteration-based - use max iterations
+        iterations = max_iterations
+        estimated_seconds = iterations * 10
+        duration = format_duration(estimated_seconds)
     else:
-        # Iteration-based test
-        loop_count = get_element_value(thread_group, 'elementProp/stringProp', 'LoopController.loops', default='1')
-        
-        # Check if it's infinite loop
-        continue_forever = get_element_value(thread_group, 'elementProp/boolProp', 'LoopController.continue_forever', default='false')
-        
-        if continue_forever.lower() == 'true' or loop_count == '-1':
-            # Infinite loop - default to 5 minute duration
-            duration = "5m"
-            iterations = None
-        else:
-            iterations = int(loop_count)
-            # Estimate duration: assume 1 iteration = 10 seconds average
-            estimated_seconds = iterations * 10
-            duration = format_duration(estimated_seconds)
+        # Default to 5 minutes
+        duration = "5m"
     
-    # Extract ramp-up time
-    ramp_time = get_element_value(thread_group, 'stringProp', 'ThreadGroup.ramp_time', default='1')
-    ramp_time = int(ramp_time)
-    
-    # Get thread group name
-    thread_group_name = thread_group.get('testname', 'Thread Group')
+    num_threads = total_threads
+    ramp_time = max_ramp_time
+    thread_group_name = f"{len(thread_groups)} Thread Groups" if len(thread_groups) > 1 else thread_groups[0].get('testname', 'Thread Group')
     
     # Calculate optimal number of containers
     num_containers = calculate_containers(num_threads)
@@ -159,8 +189,10 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     }
 
 
-def find_thread_group(root: ET.Element) -> Optional[ET.Element]:
-    """Find the first ThreadGroup element in JMX."""
+def find_all_thread_groups(root: ET.Element) -> list:
+    """Find all ThreadGroup elements in JMX."""
+    
+    thread_groups = []
     
     # Try different ThreadGroup types
     thread_group_classes = [
@@ -173,9 +205,16 @@ def find_thread_group(root: ET.Element) -> Optional[ET.Element]:
     for tg_class in thread_group_classes:
         for elem in root.iter():
             if elem.get('testclass') == tg_class:
-                return elem
+                thread_groups.append(elem)
     
-    return None
+    return thread_groups
+
+
+def find_thread_group(root: ET.Element) -> Optional[ET.Element]:
+    """Find the first ThreadGroup element in JMX (legacy - use find_all_thread_groups)."""
+    
+    thread_groups = find_all_thread_groups(root)
+    return thread_groups[0] if thread_groups else None
 
 
 def get_element_value(parent: ET.Element, element_type: str, name: str, default: str = '') -> str:
