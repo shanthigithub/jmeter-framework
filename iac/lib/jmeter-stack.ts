@@ -421,10 +421,16 @@ export class JMeterBatchStack extends cdk.Stack {
           'testScript.$': '$.testScript',
           'testId.$': '$.testId',
           'execute.$': '$.execute',
+          'configBucket': config.configBucket,
         }),
         resultSelector: {
           'Payload.$': '$.Payload',
         },
+      }).addCatch(new sfn.Fail(this, 'ParseJMXFailed', {
+        cause: 'Failed to parse JMX file',
+        error: 'JMXParseError',
+      }), {
+        resultPath: '$.error',
       })
     );
 
