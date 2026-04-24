@@ -26,9 +26,7 @@ export const config = {
       desiredvCpus: 0,        // Start at zero
       spotBidPercentage: 100, // Max bid = on-demand price (rarely interrupted)
       instanceTypes: [
-        't3.medium',   // 2 vCPU, 4 GB - primary choice
-        't3a.medium',  // AMD variant - slightly cheaper
-        't3.large',    // 2 vCPU, 8 GB - fallback if medium unavailable
+        'optimal',  // Let AWS Batch automatically select best available instance types
       ],
     },
     

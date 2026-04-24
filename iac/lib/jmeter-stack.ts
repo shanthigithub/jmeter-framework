@@ -192,13 +192,15 @@ export class JMeterBatchStack extends cdk.Stack {
           arn: instanceProfile.attrArn,
         },
         securityGroupIds: [batchSecurityGroup.securityGroupId],
-        userData: cdk.Fn.base64(
-          ec2.UserData.forLinux().addCommands(
+        userData: cdk.Fn.base64((() => {
+          const userData = ec2.UserData.forLinux();
+          userData.addCommands(
             '#!/bin/bash',
             'echo ECS_CLUSTER=${ECS_CLUSTER} >> /etc/ecs/ecs.config',
             'echo ECS_ENABLE_SPOT_INSTANCE_DRAINING=true >> /etc/ecs/ecs.config',
-          ).render()
-        ),
+          );
+          return userData.render();
+        })()),
       },
     });
 
@@ -457,13 +459,13 @@ export class JMeterBatchStack extends cdk.Stack {
     checkJobsTask.next(jobsDoneChoice);
     mergeResultsTask.next(successState);
 
-    // Define workflow
+    // Define workflow - start from readConfig and go to checkJobs
+    // (checkJobsTask already connected to jobsDoneChoice above)
     const definition = readConfigTask
       .next(filterTestsTask)
       .next(partitionDataTask)
       .next(submitJobsTask)
-      .next(checkJobsTask)
-      .next(jobsDoneChoice);
+      .next(checkJobsTask);
 
     // Create State Machine
     const stateMachine = new sfn.StateMachine(this, 'StateMachine', {

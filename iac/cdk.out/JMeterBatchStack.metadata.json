@@ -1,0 +1,237 @@
+{
+  "/JMeterBatchStack": [
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "CostCenter",
+          "value": "performance-testing"
+        },
+        {
+          "key": "ManagedBy",
+          "value": "CDK"
+        },
+        {
+          "key": "Project",
+          "value": "jmeter-batch-framework"
+        }
+      ]
+    }
+  ],
+  "/JMeterBatchStack/InstanceProfile": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "InstanceProfile"
+    }
+  ],
+  "/JMeterBatchStack/SsmParameterValue:--aws--service--ami-amazon-linux-latest--amzn2-ami-kernel-5.10-hvm-x86_64-gp2:C96584B6-F00A-464E-AD19-53AFF4B05118.Parameter": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter"
+    }
+  ],
+  "/JMeterBatchStack/LaunchTemplate": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "LaunchTemplate"
+    }
+  ],
+  "/JMeterBatchStack/ComputeEnvironment": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeEnvironment"
+    }
+  ],
+  "/JMeterBatchStack/JobQueue": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobQueue"
+    }
+  ],
+  "/JMeterBatchStack/JobDefinition": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobDefinition"
+    }
+  ],
+  "/JMeterBatchStack/ConfigBucketName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConfigBucketName"
+    }
+  ],
+  "/JMeterBatchStack/ResultsBucketName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ResultsBucketName"
+    }
+  ],
+  "/JMeterBatchStack/RepositoryUri": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "RepositoryUri"
+    }
+  ],
+  "/JMeterBatchStack/StateMachineArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "StateMachineArn"
+    }
+  ],
+  "/JMeterBatchStack/JobQueueName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobQueueName"
+    }
+  ],
+  "/JMeterBatchStack/JobDefinitionArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobDefinitionArn"
+    }
+  ],
+  "/JMeterBatchStack/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    }
+  ],
+  "/JMeterBatchStack/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    }
+  ],
+  "/JMeterBatchStack/ConfigBucket/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConfigBucket2112C5EC"
+    }
+  ],
+  "/JMeterBatchStack/ResultsBucket/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ResultsBucketA95A2103"
+    }
+  ],
+  "/JMeterBatchStack/JMeterRepository/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JMeterRepository07604368"
+    }
+  ],
+  "/JMeterBatchStack/BatchSecurityGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BatchSecurityGroup77EC865F"
+    }
+  ],
+  "/JMeterBatchStack/BatchServiceRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BatchServiceRole57930367"
+    }
+  ],
+  "/JMeterBatchStack/Ec2InstanceRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "Ec2InstanceRole212C84F4"
+    }
+  ],
+  "/JMeterBatchStack/BatchJobRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BatchJobRole37A83758"
+    }
+  ],
+  "/JMeterBatchStack/BatchExecutionRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BatchExecutionRole3527F47B"
+    }
+  ],
+  "/JMeterBatchStack/LambdaRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "LambdaRole3A44B857"
+    }
+  ],
+  "/JMeterBatchStack/SpotFleetRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SpotFleetRole6D4F7558"
+    }
+  ],
+  "/JMeterBatchStack/JMeterLogGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JMeterLogGroupEFDEA3BB"
+    }
+  ],
+  "/JMeterBatchStack/ReadConfigFn/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ReadConfigFn4D80E473"
+    }
+  ],
+  "/JMeterBatchStack/PartitionDataFn/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PartitionDataFn11BB74C4"
+    }
+  ],
+  "/JMeterBatchStack/SubmitJobsFn/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SubmitJobsFn544931AE"
+    }
+  ],
+  "/JMeterBatchStack/CheckJobsFn/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckJobsFnE7939F7A"
+    }
+  ],
+  "/JMeterBatchStack/MergeResultsFn/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "MergeResultsFnC40E34AF"
+    }
+  ],
+  "/JMeterBatchStack/StateMachine/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "StateMachine2E01A3A5"
+    }
+  ],
+  "/JMeterBatchStack/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    }
+  ],
+  "/JMeterBatchStack/BatchJobRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BatchJobRoleDefaultPolicy72C1097B"
+    }
+  ],
+  "/JMeterBatchStack/LambdaRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "LambdaRoleDefaultPolicy75625A82"
+    }
+  ],
+  "/JMeterBatchStack/StateMachine/Role/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "StateMachineRoleB840431D"
+    }
+  ],
+  "/JMeterBatchStack/StateMachine/Role/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "StateMachineRoleDefaultPolicyDF1E6607"
+    }
+  ]
+}
