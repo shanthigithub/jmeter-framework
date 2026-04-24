@@ -11,6 +11,7 @@ import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { Construct } from 'constructs';
 import { config } from '../environments/config';
 import * as path from 'path';
+import { JmxParserLambda } from './constructs/jmx-parser-lambda';
 
 /**
  * JMeter Batch Framework Stack
@@ -382,6 +383,11 @@ export class JMeterBatchStack extends cdk.Stack {
       environment: {
         RESULTS_BUCKET: config.resultsBucket,
       },
+    });
+
+    // 6. JMX Parser - automatically extracts test configuration from JMX files
+    const jmxParser = new JmxParserLambda(this, 'JmxParser', {
+      configBucket: configBucket,
     });
 
     // ═══════════════════════════════════════════════════════════════════════
