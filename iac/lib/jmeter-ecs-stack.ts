@@ -188,8 +188,8 @@ export class JMeterEcsStack extends cdk.Stack {
     // Fargate Task Definition
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
       family: 'jmeter-task',
-      cpu: config.batch.job.vcpus * 1024,  // 1 vCPU = 1024 units
-      memoryLimitMiB: config.batch.job.memoryMiB,
+      cpu: config.ecs.task.vcpus * 1024,  // 1 vCPU = 1024 units
+      memoryLimitMiB: config.ecs.task.memoryMiB,
       taskRole: taskRole,
       executionRole: taskExecutionRole,
     });
@@ -253,7 +253,7 @@ export class JMeterEcsStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'submit-tasks')),
       role: lambdaRole,
       memorySize: config.lambda.memoryMB,
-      timeout: cdk.Duration.seconds(config.lambda.timeoutSeconds.submitJobs),
+      timeout: cdk.Duration.seconds(config.lambda.timeoutSeconds.submitTasks),
       environment: {
         ECS_CLUSTER: cluster.clusterName,
         TASK_DEFINITION: taskDefinition.taskDefinitionArn,
@@ -273,7 +273,7 @@ export class JMeterEcsStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'check-tasks')),
       role: lambdaRole,
       memorySize: config.lambda.memoryMB,
-      timeout: cdk.Duration.seconds(config.lambda.timeoutSeconds.checkJobs),
+      timeout: cdk.Duration.seconds(config.lambda.timeoutSeconds.checkTasks),
       environment: {
         ECS_CLUSTER: cluster.clusterName,
       },
