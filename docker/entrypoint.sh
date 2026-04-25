@@ -186,22 +186,40 @@ echo "[DOWNLOAD] Downloading test files from S3"
 echo "=========================================="
 echo ""
 
+echo "[DEBUG] Arguments received by script: $#"
+echo "[DEBUG] JMETER_CMD array length: ${#JMETER_CMD[@]}"
+echo "[DEBUG] JMETER_CMD contents:"
+for ((idx=0; idx<${#JMETER_CMD[@]}; idx++)); do
+    echo "[DEBUG]   [$idx] = ${JMETER_CMD[$idx]}"
+done
+echo ""
+
 NEW_CMD=()
 DOWNLOAD_FAILED=0
 i=0
 
+echo "[DEBUG] Starting while loop to process arguments..."
 while [ $i -lt ${#JMETER_CMD[@]} ]; do
+    echo "[DEBUG] Loop iteration $i"
     arg="${JMETER_CMD[$i]}"
+    echo "[DEBUG]   Processing: $arg"
     
     # Check if argument is an S3 path
     if [[ $arg =~ ^s3:// ]]; then
+        echo "[DEBUG]   This is an S3 path!"
+        
         # Determine file type from previous argument
         prev_arg="${JMETER_CMD[$((i-1))]}"
+        echo "[DEBUG]   Previous argument: $prev_arg"
         
         if [ "$prev_arg" = "-t" ]; then
+            echo "[DEBUG]   Matched -t flag, this is test plan"
             # Test plan file - preserve original filename
             filename=$(basename "$arg")
+            echo "[DEBUG]   Extracted filename: $filename"
             local_file="/tmp/${filename}"
+            echo "[DEBUG]   Local file path: $local_file"
+            echo "[DEBUG]   >>> CALLING download_s3_file function <<<"
             if ! download_s3_file "$arg" "$local_file"; then
                 DOWNLOAD_FAILED=1
                 echo ""
