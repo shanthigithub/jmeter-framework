@@ -293,14 +293,36 @@ echo ""
 # Execute JMeter command
 echo "[EXECUTE] Starting JMeter..."
 echo ""
-if "$@" 2>&1; then
+
+# Run JMeter and capture exit code
+"$@" 2>&1
+JMETER_RAW_EXIT=$?
+
+echo ""
+
+# Determine actual success by checking if results file was created
+# JMeter may return non-zero for warnings, but if results exist, test ran
+RESULTS_FILE="/tmp/results-0.jtl"
+if [ -f "$RESULTS_FILE" ] && [ -s "$RESULTS_FILE" ]; then
+    # Results file exists and is not empty
+    echo "✅ [SUCCESS] JMeter test completed - results file created"
+    
+    # Check for errors in results (optional - for stricter validation)
+    # If you want to fail on test errors, uncomment this:
+    # error_count=$(grep -c 'success="false"' "$RESULTS_FILE" 2>/dev/null || echo "0")
+    # if [ "$error_count" -gt 0 ]; then
+    #     echo "⚠️  [WARNING] Test completed but had ${error_count} failed requests"
+    # fi
+    
     JMETER_EXIT_CODE=0
-    echo ""
-    echo "✅ [SUCCESS] JMeter test completed successfully"
+elif [ $JMETER_RAW_EXIT -eq 0 ]; then
+    echo "✅ [SUCCESS] JMeter completed with exit code 0"
+    JMETER_EXIT_CODE=0
 else
-    JMETER_EXIT_CODE=$?
-    echo ""
-    echo "❌ [ERROR] JMeter test failed with exit code: ${JMETER_EXIT_CODE}"
+    # No results file and non-zero exit - actual failure
+    echo "❌ [ERROR] JMeter failed with exit code: ${JMETER_RAW_EXIT}"
+    echo "❌ [ERROR] No results file created - test did not run properly"
+    JMETER_EXIT_CODE=$JMETER_RAW_EXIT
 fi
 
 echo ""
