@@ -279,7 +279,25 @@ export class JMeterEcsStack extends cdk.Stack {
       },
     });
 
-    // 5. Merge Results - aggregates results from all tasks
+    // 5. Wait For Ready - coordinates container synchronization
+    const waitForReadyFn = new lambda.Function(this, 'WaitForReadyFn', {
+      functionName: 'jmeter-ecs-wait-for-ready',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'wait-for-ready')),
+      role: lambdaRole,
+      memorySize: config.lambda.memoryMB,
+      timeout: cdk.Duration.seconds(360), // 6 minutes (needs to wait for all containers)
+      environment: {
+        ECS_CLUSTER: cluster.clusterName,
+        CONFIG_BUCKET: config.configBucket,
+        MAX_WAIT_SECONDS: '300',  // 5 minutes max wait for all containers
+        POLL_INTERVAL_SECONDS: '5',  // Check every 5 seconds
+      },
+    });
+
+    // 6. Merge Results - aggregates results from all tasks
     const mergeResultsFn = new lambda.Function(this, 'MergeResultsFn', {
       functionName: 'jmeter-ecs-merge-results',
       runtime: lambda.Runtime.PYTHON_3_12,
@@ -294,7 +312,7 @@ export class JMeterEcsStack extends cdk.Stack {
       },
     });
 
-    // 6. JMX Parser - automatically extracts test configuration from JMX files
+    // 7. JMX Parser - automatically extracts test configuration from JMX files
     const jmxParser = new JmxParserLambda(this, 'JmxParser', {
       configBucket: configBucket,
     });
@@ -365,10 +383,27 @@ export class JMeterEcsStack extends cdk.Stack {
       resultPath: '$.tasksResult',
     });
 
-    // Wait for tasks to start (Fargate is faster than Batch!)
-    const waitForTasksToStart = new sfn.Wait(this, 'WaitForTasksToStart', {
-      time: sfn.WaitTime.duration(cdk.Duration.seconds(30)),  // Reduced from 3 minutes!
-    });
+    // Task: Wait For Ready - synchronize container startup (k6-style coordination)
+    const waitForReadyTask = new sfn.Map(this, 'WaitForReady', {
+      itemsPath: '$.tasksResult.Payload.tasks',
+      resultPath: '$.syncResult',
+      maxConcurrency: 5,
+    }).iterator(
+      new tasks.LambdaInvoke(this, 'WaitForReadyPerTest', {
+        lambdaFunction: waitForReadyFn,
+        payload: sfn.TaskInput.fromObject({
+          'runId.$': '$.runId',
+          'testId.$': '$.testId',
+          'taskArns.$': '$.taskArns',
+          'expectedTaskCount.$': '$.numContainers',
+          'clusterArn': cluster.clusterArn,
+          'configBucket': config.configBucket,
+        }),
+        resultSelector: {
+          'Payload.$': '$.Payload',
+        },
+      })
+    );
 
     // Task: Check Tasks
     const checkTasksTask = new tasks.LambdaInvoke(this, 'CheckTasks', {
@@ -419,7 +454,7 @@ export class JMeterEcsStack extends cdk.Stack {
       .next(transformParsedTests)
       .next(partitionDataTask)
       .next(submitTasksTask)
-      .next(waitForTasksToStart)
+      .next(waitForReadyTask)  // Synchronize containers before starting test
       .next(checkTasksTask);
 
     // Create State Machine

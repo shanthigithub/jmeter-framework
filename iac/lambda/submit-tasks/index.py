@@ -106,6 +106,8 @@ def lambda_handler(event, context):
                 task_family = task_family.replace('_', '-')[:128]
                 
                 # Environment variables
+                enable_sync = 'true' if num_containers > 1 else 'false'  # Enable sync for multi-container tests
+                
                 environment = [
                     {'name': 'TEST_ID', 'value': test_id},
                     {'name': 'CONTAINER_ID', 'value': str(container_idx)},
@@ -114,6 +116,7 @@ def lambda_handler(event, context):
                     {'name': 'RESULTS_BUCKET', 'value': results_bucket},
                     {'name': 'RESULTS_PREFIX', 'value': f'{run_id}/{test_id}'},
                     {'name': 'JVM_ARGS', 'value': jvm_args},
+                    {'name': 'ENABLE_SYNC', 'value': enable_sync},  # Auto-enable for multi-container tests
                 ]
                 
                 # Launch ECS Fargate task

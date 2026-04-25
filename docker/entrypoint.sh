@@ -234,6 +234,63 @@ else
 fi
 echo ""
 
+# Container Synchronization (optional)
+# If ENABLE_SYNC=true, wait for START signal from coordinator before running test
+if [ "${ENABLE_SYNC:-false}" = "true" ]; then
+    echo "=========================================="
+    echo "[SYNC] Waiting for START signal"
+    echo "=========================================="
+    echo "[SYNC] Container is READY"
+    echo "[SYNC] Waiting for coordinator to signal all containers..."
+    echo ""
+    
+    SIGNAL_KEY="signals/${RUN_ID}/START"
+    MAX_SYNC_WAIT="${MAX_SYNC_WAIT:-600}"  # 10 minutes default
+    SYNC_POLL_INTERVAL="${SYNC_POLL_INTERVAL:-3}"  # 3 seconds default
+    
+    sync_start_time=$(date +%s)
+    sync_attempt=0
+    
+    while true; do
+        sync_attempt=$((sync_attempt + 1))
+        sync_elapsed=$(($(date +%s) - sync_start_time))
+        
+        # Check timeout
+        if [ $sync_elapsed -gt $MAX_SYNC_WAIT ]; then
+            echo "❌ [ERROR] Timeout waiting for START signal after ${sync_elapsed}s"
+            echo "[ERROR] Expected signal at: s3://${CONFIG_BUCKET}/${SIGNAL_KEY}"
+            exit 1
+        fi
+        
+        # Check if START signal exists in S3
+        if aws s3 ls "s3://${CONFIG_BUCKET}/${SIGNAL_KEY}" >/dev/null 2>&1; then
+            echo "✅ [SYNC] START signal received!"
+            
+            # Download and display signal data
+            signal_data=$(aws s3 cp "s3://${CONFIG_BUCKET}/${SIGNAL_KEY}" - 2>/dev/null)
+            if [ -n "$signal_data" ]; then
+                echo "[SYNC] Signal details:"
+                echo "$signal_data" | grep -E '"(timestamp|taskCount|message)"' || echo "$signal_data"
+            fi
+            
+            echo "[SYNC] All containers synchronized - proceeding with test"
+            echo ""
+            break
+        fi
+        
+        # Log progress every 10 attempts
+        if [ $((sync_attempt % 10)) -eq 0 ]; then
+            echo "[SYNC] Still waiting... (${sync_elapsed}s elapsed, attempt ${sync_attempt})"
+        fi
+        
+        # Wait before next check
+        sleep $SYNC_POLL_INTERVAL
+    done
+else
+    echo "[SYNC] Synchronization disabled - starting immediately"
+    echo ""
+fi
+
 # Set JVM options
 export JVM_ARGS
 
