@@ -79,14 +79,16 @@ def lambda_handler(event, context):
             
             for container_idx in range(num_containers):
                 # Build JMeter command
+                # NOTE: We do NOT pass -Jthreads or -Jduration because the JMX file
+                # already contains the correct configuration! Passing these would override
+                # the JMX settings and break iteration-based tests.
                 command = [
                     'jmeter',
                     '-n',  # Non-GUI mode
                     '-t', f's3://{config_bucket}/{test_script}',  # Test plan from S3
                     '-l', f'/tmp/results-{container_idx}.jtl',  # Results file
                     '-j', f'/tmp/jmeter-{container_idx}.log',  # JMeter log
-                    '-Jthreads', str(threads),
-                    '-Jduration', duration,
+                    # Distribution properties (for distributed test awareness)
                     '-JcontainerId', str(container_idx),
                     '-JtotalContainers', str(num_containers),
                 ]

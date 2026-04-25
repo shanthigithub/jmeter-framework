@@ -149,18 +149,23 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     # Determine final duration/iterations
     duration = None
     iterations = None
+    estimated_duration_seconds = None
     
     if use_scheduler and max_duration_seconds > 0:
-        # At least one group uses scheduler - use max duration
+        # At least one group uses scheduler - use actual duration from JMX
         duration = format_duration(max_duration_seconds)
+        estimated_duration_seconds = max_duration_seconds
     elif max_iterations > 0:
-        # Iteration-based - use max iterations
+        # Iteration-based - DON'T estimate time, iterations are iterations!
         iterations = max_iterations
-        estimated_seconds = iterations * 10
-        duration = format_duration(estimated_seconds)
+        duration = None  # No duration for iteration-based tests
+        # Conservative estimate: 30s per iteration for timeout calculation
+        # This is ONLY for Step Functions timeout, not passed to JMeter
+        estimated_duration_seconds = max_iterations * 30 + max_ramp_time
     else:
-        # Default to 5 minutes
+        # Infinite loop or default - estimate 5 minutes for monitoring
         duration = "5m"
+        estimated_duration_seconds = 300
     
     num_threads = total_threads
     ramp_time = max_ramp_time
