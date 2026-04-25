@@ -130,7 +130,7 @@ echo "=========================================="
 echo ""
 
 # Execute JMeter with modified command
-if "${NEW_CMD[@]}"; then
+if ${NEW_CMD[@]}; then
     JMETER_EXIT_CODE=0
     echo ""
     echo "✅ JMeter test completed successfully"
