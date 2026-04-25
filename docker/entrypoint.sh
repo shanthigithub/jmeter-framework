@@ -312,10 +312,31 @@ export JVM_ARGS
 echo "=========================================="
 echo "[RUN] Running JMeter Test"
 echo "=========================================="
+echo "[DEBUG] Final command to execute:"
+echo "  ${NEW_CMD[@]}"
+echo ""
+echo "[DEBUG] Command breakdown:"
+for ((idx=0; idx<${#NEW_CMD[@]}; idx++)); do
+    echo "  [$idx] ${NEW_CMD[$idx]}"
+done
 echo ""
 
-# Execute JMeter with modified command
-if ${NEW_CMD[@]}; then
+# Verify JMeter binary exists
+if command -v jmeter >/dev/null 2>&1; then
+    echo "[DEBUG] JMeter binary found: $(which jmeter)"
+    echo "[DEBUG] JMeter version:"
+    jmeter --version 2>&1 | head -3 || echo "  (version check failed)"
+else
+    echo "❌ [ERROR] JMeter binary not found in PATH!"
+    echo "[DEBUG] PATH=$PATH"
+    exit 1
+fi
+echo ""
+
+# Execute JMeter with modified command (capture all output)
+echo "[EXECUTE] Running: ${NEW_CMD[@]}"
+echo ""
+if ${NEW_CMD[@]} 2>&1; then
     JMETER_EXIT_CODE=0
     echo ""
     echo "✅ [SUCCESS] JMeter test completed successfully"
@@ -323,6 +344,7 @@ else
     JMETER_EXIT_CODE=$?
     echo ""
     echo "❌ [ERROR] JMeter test failed with exit code: ${JMETER_EXIT_CODE}"
+    echo "[ERROR] Command that failed: ${NEW_CMD[@]}"
 fi
 
 echo ""
