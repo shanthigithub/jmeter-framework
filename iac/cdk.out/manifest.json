@@ -1,21 +1,22 @@
 {
   "version": "53.0.0",
   "artifacts": {
-    "JMeterBatchStack.assets": {
+    "JMeterEcsStack.assets": {
       "type": "cdk:asset-manifest",
       "properties": {
-        "file": "JMeterBatchStack.assets.json",
+        "file": "JMeterEcsStack.assets.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
       }
     },
-    "JMeterBatchStack": {
+    "JMeterEcsStack": {
       "type": "aws:cloudformation:stack",
       "environment": "aws://623035187488/us-east-1",
       "properties": {
-        "templateFile": "JMeterBatchStack.template.json",
+        "templateFile": "JMeterEcsStack.template.json",
         "terminationProtection": false,
         "tags": {
+          "Architecture": "ECS-Fargate",
           "CostCenter": "performance-testing",
           "ManagedBy": "CDK",
           "Project": "jmeter-batch-framework"
@@ -23,11 +24,11 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::623035187488:role/cdk-hnb659fds-deploy-role-623035187488-us-east-1",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::623035187488:role/cdk-hnb659fds-cfn-exec-role-623035187488-us-east-1",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-623035187488-us-east-1/f30ca306aa0b503a1ba7ec49a8c726e548b74fc7134759814ae8f3eeb8242520.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-623035187488-us-east-1/4f2bcbbeb93cd4fab34432fbb429196960576720ea81c47c1344b6bd51281831.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
-          "JMeterBatchStack.assets"
+          "JMeterEcsStack.assets"
         ],
         "lookupRole": {
           "arn": "arn:${AWS::Partition}:iam::623035187488:role/cdk-hnb659fds-lookup-role-623035187488-us-east-1",
@@ -36,10 +37,10 @@
         }
       },
       "dependencies": [
-        "JMeterBatchStack.assets"
+        "JMeterEcsStack.assets"
       ],
-      "additionalMetadataFile": "JMeterBatchStack.metadata.json",
-      "displayName": "JMeterBatchStack"
+      "additionalMetadataFile": "JMeterEcsStack.metadata.json",
+      "displayName": "JMeterEcsStack"
     },
     "Tree": {
       "type": "cdk:tree",

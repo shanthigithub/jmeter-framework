@@ -5,179 +5,98 @@ on:
   schedule:
     - cron: '0 2 * * *'  # Every day at 2 AM UTC
   
-  # Trigger when JMX files are pushed
-  push:
-    paths:
-      - 'examples/*.jmx'
-      - 'project-config/*.jmx'
-      - 'examples/test-suite.json'
-  
-  # Allow manual trigger too
+  # Allow manual trigger
   workflow_dispatch:
     inputs:
-      test_suite_name:
-        description: 'Test Suite Name'
-        required: false
-        default: 'scheduled-test'
+      test_config:
+        description: 'Test configuration file to run'
+        required: true
+        default: 'config/nightly-test.json'
+        type: choice
+        options:
+          - 'config/nightly-test.json'
+          - 'config/dcp-api-test.json'
+          - 'config/test-suite.json'
 
 env:
   AWS_REGION: us-east-1
-  # Default test configuration
-  DEFAULT_TEST_SUITE: 'nightly-regression'
-  DEFAULT_NUM_MINIONS: '2'
-  DEFAULT_THREADS: '10'
-  DEFAULT_DURATION: '300'
-  DEFAULT_RAMP_UP: '60'
+  # Config file to use for scheduled runs (when triggered by cron)
+  SCHEDULED_CONFIG: 'config/nightly-test.json'
 
 jobs:
-  run-automated-test:
-    name: Run Automated JMeter Test
+  run-scheduled-test:
+    name: Run Scheduled JMeter Test
     runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Determine Test Configuration
-        id: test-config
-        run: |
-          # Use manual input if provided, otherwise use defaults
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.test_suite_name }}" ]; then
-            TEST_SUITE="${{ github.event.inputs.test_suite_name }}"
-          else
-            TEST_SUITE="${{ env.DEFAULT_TEST_SUITE }}"
-          fi
-          
-          echo "test_suite=$TEST_SUITE" >> $GITHUB_OUTPUT
-          echo "📝 Using test suite: $TEST_SUITE"
-          
-          # Find the first JMX file in examples
-          JMX_FILE=$(ls examples/*.jmx 2>/dev/null | head -n 1 | xargs basename 2>/dev/null || echo "test-plan.jmx")
-          echo "jmx_file=$JMX_FILE" >> $GITHUB_OUTPUT
-          echo "📝 Using JMX file: $JMX_FILE"
-
+      
       - name: Get Stack Outputs
-        id: stack-outputs
+        id: get-outputs
         run: |
-          STACK_NAME="JMeterEcsStack"
+          echo "🔍 Querying CloudFormation stack..."
           
-          echo "🔍 Getting CloudFormation stack outputs..."
-          STATE_MACHINE_ARN=$(aws cloudformation describe-stacks \
-            --stack-name $STACK_NAME \
+          STATE_MACHINE=$(aws cloudformation describe-stacks \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
             --output text)
           
-          S3_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name $STACK_NAME \
-            --query 'Stacks[0].Outputs[?OutputKey==`ResultsBucket`].OutputValue' \
-            --output text)
-          
-          echo "state_machine_arn=$STATE_MACHINE_ARN" >> $GITHUB_OUTPUT
-          echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
-          
-          echo "✅ State Machine ARN: $STATE_MACHINE_ARN"
-          echo "✅ S3 Bucket: $S3_BUCKET"
-
-      - name: Upload Test Files to S3
+          echo "state_machine=$STATE_MACHINE" >> $GITHUB_OUTPUT
+          echo "⚙️  State Machine: $STATE_MACHINE"
+      
+      - name: Determine Config File
+        id: config
         run: |
-          S3_BUCKET="${{ steps.stack-outputs.outputs.s3_bucket }}"
-          TEST_SUITE="${{ steps.test-config.outputs.test_suite }}"
-          JMX_FILE="${{ steps.test-config.outputs.jmx_file }}"
-          
-          echo "📤 Uploading test files to S3..."
-          
-          # Upload all JMX files from examples
-          if [ -d "examples" ] && [ "$(ls -A examples/*.jmx 2>/dev/null)" ]; then
-            for jmx in examples/*.jmx; do
-              filename=$(basename "$jmx")
-              aws s3 cp "$jmx" "s3://$S3_BUCKET/test-suites/$TEST_SUITE/$filename"
-              echo "✅ Uploaded: $filename"
-            done
+          # Use manual input if provided, otherwise use scheduled config
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CONFIG_KEY="${{ github.event.inputs.test_config }}"
+          else
+            CONFIG_KEY="${{ env.SCHEDULED_CONFIG }}"
           fi
           
-          # Upload any supporting data files
-          if [ -d "examples/data" ]; then
-            aws s3 sync examples/data/ "s3://$S3_BUCKET/test-suites/$TEST_SUITE/data/"
-            echo "✅ Uploaded data files"
-          fi
-
-      - name: Create Test Configuration
-        run: |
-          S3_BUCKET="${{ steps.stack-outputs.outputs.s3_bucket }}"
-          TEST_SUITE="${{ steps.test-config.outputs.test_suite }}"
-          JMX_FILE="${{ steps.test-config.outputs.jmx_file }}"
-          
-          # Create test-suite.json
-          cat > test-suite.json << EOF
-          {
-            "testSuiteName": "$TEST_SUITE",
-            "jmxFile": "$JMX_FILE",
-            "numMinions": ${{ env.DEFAULT_NUM_MINIONS }},
-            "parameters": {
-              "threads": "${{ env.DEFAULT_THREADS }}",
-              "duration": "${{ env.DEFAULT_DURATION }}",
-              "rampUp": "${{ env.DEFAULT_RAMP_UP }}"
-            },
-            "metadata": {
-              "triggeredBy": "Scheduled Workflow",
-              "triggerType": "${{ github.event_name }}",
-              "runId": "${{ github.run_id }}",
-              "sha": "${{ github.sha }}",
-              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            }
-          }
-          EOF
-          
-          echo "📝 Test Configuration:"
-          cat test-suite.json
-          
-          aws s3 cp test-suite.json "s3://$S3_BUCKET/test-suites/$TEST_SUITE/test-suite.json"
-          echo "✅ Configuration uploaded"
-
+          echo "config_key=$CONFIG_KEY" >> $GITHUB_OUTPUT
+          echo "📝 Using config: $CONFIG_KEY"
+      
       - name: Start Test Execution
         id: start-execution
         run: |
-          STATE_MACHINE_ARN="${{ steps.stack-outputs.outputs.state_machine_arn }}"
-          S3_BUCKET="${{ steps.stack-outputs.outputs.s3_bucket }}"
-          TEST_SUITE="${{ steps.test-config.outputs.test_suite }}"
-          EXECUTION_NAME="auto-$(date +%Y%m%d-%H%M%S)-${{ github.run_id }}"
+          STATE_MACHINE="${{ steps.get-outputs.outputs.state_machine }}"
+          CONFIG_KEY="${{ steps.config.outputs.config_key }}"
+          EXECUTION_NAME="scheduled-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_NUMBER}"
           
-          echo "🚀 Starting automated test execution..."
+          echo "🚀 Starting scheduled test execution..."
+          echo "📋 Config: $CONFIG_KEY"
           
-          EXECUTION_INPUT=$(cat << EOF
-          {
-            "s3BucketName": "$S3_BUCKET",
-            "testSuiteName": "$TEST_SUITE",
-            "configFile": "test-suite.json"
-          }
-          EOF
-          )
+          INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\"}"
           
           EXECUTION_ARN=$(aws stepfunctions start-execution \
-            --state-machine-arn "$STATE_MACHINE_ARN" \
-            --name "$EXECUTION_NAME" \
-            --input "$EXECUTION_INPUT" \
+            --state-machine-arn $STATE_MACHINE \
+            --name $EXECUTION_NAME \
+            --input "$INPUT_JSON" \
             --query 'executionArn' \
             --output text)
           
           echo "execution_arn=$EXECUTION_ARN" >> $GITHUB_OUTPUT
           echo "execution_name=$EXECUTION_NAME" >> $GITHUB_OUTPUT
           
-          REGION="${{ env.AWS_REGION }}"
-          CONSOLE_URL="https://console.aws.amazon.com/states/home?region=$REGION#/executions/details/$EXECUTION_ARN"
+          CONSOLE_URL="https://console.aws.amazon.com/states/home?region=${{ env.AWS_REGION }}#/executions/details/$EXECUTION_ARN"
           echo "console_url=$CONSOLE_URL" >> $GITHUB_OUTPUT
           
           echo "✅ Execution started: $EXECUTION_NAME"
-          echo "🌐 Monitor at: $CONSOLE_URL"
-
-      - name: Monitor Test Execution
+          echo "🔗 Console: $CONSOLE_URL"
+      
+      - name: Monitor Execution
         run: |
           EXECUTION_ARN="${{ steps.start-execution.outputs.execution_arn }}"
           
@@ -186,23 +105,28 @@ jobs:
           TIMEOUT=7200  # 2 hours timeout
           
           while true; do
-            STATUS=$(aws stepfunctions describe-execution \
-              --execution-arn "$EXECUTION_ARN" \
-              --query 'status' \
-              --output text)
+            RESPONSE=$(aws stepfunctions describe-execution \
+              --execution-arn $EXECUTION_ARN \
+              --output json)
             
+            STATUS=$(echo $RESPONSE | jq -r '.status')
             ELAPSED=$(($(date +%s) - START_TIME))
-            echo "⏱️  Status: $STATUS (${ELAPSED}s elapsed)"
+            ELAPSED_MIN=$((ELAPSED / 60))
+            
+            echo "[${ELAPSED_MIN}m] Status: $STATUS"
             
             if [ "$STATUS" = "SUCCEEDED" ]; then
               echo "✅ Test execution completed successfully!"
               break
             elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "TIMED_OUT" ] || [ "$STATUS" = "ABORTED" ]; then
               echo "❌ Test execution failed with status: $STATUS"
-              aws stepfunctions describe-execution \
-                --execution-arn "$EXECUTION_ARN" \
-                --query '{status: status, cause: cause, error: error}' \
-                --output json
+              
+              ERROR=$(echo $RESPONSE | jq -r '.error // empty')
+              CAUSE=$(echo $RESPONSE | jq -r '.cause // empty')
+              
+              [ ! -z "$ERROR" ] && echo "Error: $ERROR"
+              [ ! -z "$CAUSE" ] && echo "Cause: $CAUSE"
+              
               exit 1
             fi
             
@@ -213,85 +137,21 @@ jobs:
             
             sleep 30
           done
-
-      - name: Download Test Results
-        if: success()
-        run: |
-          S3_BUCKET="${{ steps.stack-outputs.outputs.s3_bucket }}"
-          TEST_SUITE="${{ steps.test-config.outputs.test_suite }}"
-          
-          echo "📥 Downloading test results..."
-          mkdir -p results
-          
-          aws s3 sync \
-            "s3://$S3_BUCKET/results/$TEST_SUITE/" \
-            "results/" \
-            --exclude "*" \
-            --include "*.jtl" \
-            --include "*.html" \
-            --include "*.csv" \
-            --include "*.json"
-          
-          echo "✅ Results downloaded"
-          ls -lh results/ || echo "No results files found"
-
-      - name: Parse Test Results
-        if: success()
-        id: parse-results
-        run: |
-          if [ -f "results/summary.json" ]; then
-            # Extract key metrics from summary
-            TOTAL_REQUESTS=$(jq -r '.summary.total_requests // "N/A"' results/summary.json)
-            ERROR_RATE=$(jq -r '.summary.error_rate // "N/A"' results/summary.json)
-            AVG_RESPONSE_TIME=$(jq -r '.summary.avg_response_time // "N/A"' results/summary.json)
-            
-            echo "total_requests=$TOTAL_REQUESTS" >> $GITHUB_OUTPUT
-            echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
-            echo "avg_response_time=$AVG_RESPONSE_TIME" >> $GITHUB_OUTPUT
-            
-            echo "📊 Total Requests: $TOTAL_REQUESTS"
-            echo "📊 Error Rate: $ERROR_RATE%"
-            echo "📊 Avg Response Time: ${AVG_RESPONSE_TIME}ms"
-          else
-            echo "⚠️  Summary file not found"
-          fi
-
-      - name: Upload Results as Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: automated-test-results-${{ github.run_id }}
-          path: results/
-          retention-days: 90  # Keep for 90 days
-
-      - name: Generate Test Report
+      
+      - name: Generate Summary
         if: always()
         run: |
-          echo "# 🤖 Automated JMeter Test Report" >> $GITHUB_STEP_SUMMARY
+          echo "## 🤖 Scheduled JMeter Test" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📋 Test Information" >> $GITHUB_STEP_SUMMARY
-          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Test Suite**: ${{ steps.test-config.outputs.test_suite }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **JMX File**: ${{ steps.test-config.outputs.jmx_file }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Test Runners**: ${{ env.DEFAULT_NUM_MINIONS }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Execution**: ${{ steps.start-execution.outputs.execution_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Config** | \`${{ steps.config.outputs.config_key }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Execution** | \`${{ steps.start-execution.outputs.execution_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Region** | \`${{ env.AWS_REGION }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -n "${{ steps.parse-results.outputs.total_requests }}" ]; then
-            echo "## 📊 Test Results" >> $GITHUB_STEP_SUMMARY
-            echo "- **Total Requests**: ${{ steps.parse-results.outputs.total_requests }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **Error Rate**: ${{ steps.parse-results.outputs.error_rate }}%" >> $GITHUB_STEP_SUMMARY
-            echo "- **Avg Response Time**: ${{ steps.parse-results.outputs.avg_response_time }}ms" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "## 🔗 Links" >> $GITHUB_STEP_SUMMARY
-          echo "- [AWS Step Functions Console](${{ steps.start-execution.outputs.console_url }})" >> $GITHUB_STEP_SUMMARY
-          echo "- [S3 Results](https://s3.console.aws.amazon.com/s3/buckets/${{ steps.stack-outputs.outputs.s3_bucket }}?prefix=results/${{ steps.test-config.outputs.test_suite }}/)" >> $GITHUB_STEP_SUMMARY
-
-      - name: Notify on Failure
-        if: failure()
-        run: |
-          echo "🚨 Test execution failed!"
-          echo "Check the logs and AWS Console for details"
-          # Add notification logic here (Slack, email, etc.)
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Execution](${{ steps.start-execution.outputs.console_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Step Functions Console](https://console.aws.amazon.com/states/home?region=${{ env.AWS_REGION }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **Note:** Segment count is automatically determined by the JMX file configuration" >> $GITHUB_STEP_SUMMARY
