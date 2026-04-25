@@ -36,7 +36,8 @@ def lambda_handler(event, context):
     """
     try:
         config_bucket = os.environ['CONFIG_BUCKET']
-        config_key = event.get('configKey', 'test-suite.json')
+        # Support both 'configFile' (from Step Functions) and 'configKey' (legacy)
+        config_key = event.get('configFile') or event.get('configKey', 'test-suite.json')
         
         print(f"Reading config from s3://{config_bucket}/{config_key}")
         

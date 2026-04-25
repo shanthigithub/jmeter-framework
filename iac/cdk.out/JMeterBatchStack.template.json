@@ -386,7 +386,10 @@
        "Sid": "S3Access"
       },
       {
-       "Action": "batch:SubmitJob",
+       "Action": [
+        "batch:SubmitJob",
+        "batch:TagResource"
+       ],
        "Effect": "Allow",
        "Resource": "*",
        "Sid": "BatchSubmitJob"
@@ -415,104 +418,12 @@
     "aws:cdk:path": "JMeterBatchStack/LambdaRole/DefaultPolicy/Resource"
    }
   },
-  "InstanceProfile": {
-   "Type": "AWS::IAM::InstanceProfile",
-   "Properties": {
-    "Roles": [
-     {
-      "Ref": "Ec2InstanceRole212C84F4"
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "JMeterBatchStack/InstanceProfile"
-   }
-  },
-  "LaunchTemplate": {
-   "Type": "AWS::EC2::LaunchTemplate",
-   "Properties": {
-    "LaunchTemplateData": {
-     "IamInstanceProfile": {
-      "Arn": {
-       "Fn::GetAtt": [
-        "InstanceProfile",
-        "Arn"
-       ]
-      }
-     },
-     "ImageId": {
-      "Ref": "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter"
-     },
-     "InstanceType": "optimal",
-     "SecurityGroupIds": [
-      {
-       "Fn::GetAtt": [
-        "BatchSecurityGroup77EC865F",
-        "GroupId"
-       ]
-      }
-     ],
-     "UserData": {
-      "Fn::Base64": "#!/bin/bash\n#!/bin/bash\necho ECS_CLUSTER=${ECS_CLUSTER} >> /etc/ecs/ecs.config\necho ECS_ENABLE_SPOT_INSTANCE_DRAINING=true >> /etc/ecs/ecs.config"
-     }
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "JMeterBatchStack/LaunchTemplate"
-   }
-  },
-  "SpotFleetRole6D4F7558": {
-   "Type": "AWS::IAM::Role",
-   "Properties": {
-    "AssumeRolePolicyDocument": {
-     "Statement": [
-      {
-       "Action": "sts:AssumeRole",
-       "Effect": "Allow",
-       "Principal": {
-        "Service": "spotfleet.amazonaws.com"
-       }
-      }
-     ],
-     "Version": "2012-10-17"
-    },
-    "ManagedPolicyArns": [
-     {
-      "Fn::Join": [
-       "",
-       [
-        "arn:",
-        {
-         "Ref": "AWS::Partition"
-        },
-        ":iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole"
-       ]
-      ]
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "JMeterBatchStack/SpotFleetRole/Resource"
-   }
-  },
   "ComputeEnvironment": {
    "Type": "AWS::Batch::ComputeEnvironment",
    "Properties": {
-    "ComputeEnvironmentName": "jmeter-batch-spot",
+    "ComputeEnvironmentName": "jmeter-batch-fargate",
     "ComputeResources": {
-     "BidPercentage": 100,
-     "DesiredvCpus": 0,
-     "InstanceRole": {
-      "Fn::GetAtt": [
-       "InstanceProfile",
-       "Arn"
-      ]
-     },
-     "InstanceTypes": [
-      "optimal"
-     ],
      "MaxvCpus": 16,
-     "MinvCpus": 0,
      "SecurityGroupIds": [
       {
        "Fn::GetAtt": [
@@ -521,12 +432,6 @@
        ]
       }
      ],
-     "SpotIamFleetRole": {
-      "Fn::GetAtt": [
-       "SpotFleetRole6D4F7558",
-       "Arn"
-      ]
-     },
      "Subnets": [
       "subnet-07525312cf7ee5a14",
       "subnet-0db6e080c20df42ac",
@@ -535,17 +440,17 @@
       "subnet-0d210e1f36a70f45a",
       "subnet-08a5d5bbc48426289"
      ],
-     "Tags": {
-      "Name": "jmeter-batch-worker",
-      "Project": "jmeter-batch-framework"
-     },
-     "Type": "SPOT"
+     "Type": "FARGATE"
     },
     "ServiceRole": {
      "Fn::GetAtt": [
       "BatchServiceRole57930367",
       "Arn"
      ]
+    },
+    "Tags": {
+     "Name": "jmeter-batch-worker",
+     "Project": "jmeter-batch-framework"
     },
     "Type": "MANAGED"
    },
@@ -679,12 +584,23 @@
        "awslogs-stream-prefix": "jmeter"
       }
      },
-     "Memory": 4096,
-     "Vcpus": 2
+     "NetworkConfiguration": {
+      "AssignPublicIp": "ENABLED"
+     },
+     "ResourceRequirements": [
+      {
+       "Type": "VCPU",
+       "Value": "2"
+      },
+      {
+       "Type": "MEMORY",
+       "Value": "4096"
+      }
+     ]
     },
     "JobDefinitionName": "jmeter-batch-job",
     "PlatformCapabilities": [
-     "EC2"
+     "FARGATE"
     ],
     "RetryStrategy": {
      "Attempts": 3,
@@ -716,7 +632,7 @@
     ],
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-623035187488-us-east-1",
-     "S3Key": "6911f2f088cf27efa5f9713ed558c369690b93f8d04f964bb3b25e17a940ae00.zip"
+     "S3Key": "2c083cf9f1a0b643c574723bd76aca9471b42938f20e60d6ebfdaeca303e5dff.zip"
     },
     "Environment": {
      "Variables": {
@@ -741,7 +657,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "JMeterBatchStack/ReadConfigFn/Resource",
-    "aws:asset:path": "asset.6911f2f088cf27efa5f9713ed558c369690b93f8d04f964bb3b25e17a940ae00",
+    "aws:asset:path": "asset.2c083cf9f1a0b643c574723bd76aca9471b42938f20e60d6ebfdaeca303e5dff",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -837,7 +753,7 @@
     ],
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-623035187488-us-east-1",
-     "S3Key": "a62e4cf0685e2781cdda6b36d922ee5df07f73b1049748817fa7f7bc19ab0bfc.zip"
+     "S3Key": "c55527da5920be9be733485e741de45a826a891a19b09045ae6bb038208cd101.zip"
     },
     "FunctionName": "jmeter-batch-check-jobs",
     "Handler": "index.lambda_handler",
@@ -857,7 +773,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "JMeterBatchStack/CheckJobsFn/Resource",
-    "aws:asset:path": "asset.a62e4cf0685e2781cdda6b36d922ee5df07f73b1049748817fa7f7bc19ab0bfc",
+    "aws:asset:path": "asset.c55527da5920be9be733485e741de45a826a891a19b09045ae6bb038208cd101",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -900,6 +816,250 @@
     "aws:asset:property": "Code"
    }
   },
+  "JmxParserJmxParserFunctionServiceRoleCCB7B6F7": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "JMeterBatchStack/JmxParser/JmxParserFunction/ServiceRole/Resource"
+   }
+  },
+  "JmxParserJmxParserFunctionServiceRoleDefaultPolicyBE553518": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetBucket*",
+        "s3:GetObject*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ConfigBucket2112C5EC",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ConfigBucket2112C5EC",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "JmxParserJmxParserFunctionServiceRoleDefaultPolicyBE553518",
+    "Roles": [
+     {
+      "Ref": "JmxParserJmxParserFunctionServiceRoleCCB7B6F7"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "JMeterBatchStack/JmxParser/JmxParserFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "JmxParserJmxParserFunction06D3C1EE": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-623035187488-us-east-1",
+     "S3Key": "6b5efbe990e0cb755e473fdc3168bd1e592a478fc7d7bdaf263385008687a0c3.zip"
+    },
+    "Description": "Parses JMX files to extract test configuration automatically",
+    "Environment": {
+     "Variables": {
+      "CONFIG_BUCKET": {
+       "Ref": "ConfigBucket2112C5EC"
+      }
+     }
+    },
+    "Handler": "index.lambda_handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "JmxParserJmxParserFunctionServiceRoleCCB7B6F7",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.11",
+    "Timeout": 60
+   },
+   "DependsOn": [
+    "JmxParserJmxParserFunctionServiceRoleDefaultPolicyBE553518",
+    "JmxParserJmxParserFunctionServiceRoleCCB7B6F7"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "JMeterBatchStack/JmxParser/JmxParserFunction/Resource",
+    "aws:asset:path": "asset.6b5efbe990e0cb755e473fdc3168bd1e592a478fc7d7bdaf263385008687a0c3",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "JmxParserJmxParserFunctionLogRetention324DE0C3": {
+   "Type": "Custom::LogRetention",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A",
+      "Arn"
+     ]
+    },
+    "LogGroupName": {
+     "Fn::Join": [
+      "",
+      [
+       "/aws/lambda/",
+       {
+        "Ref": "JmxParserJmxParserFunction06D3C1EE"
+       }
+      ]
+     ]
+    },
+    "RetentionInDays": 7
+   },
+   "Metadata": {
+    "aws:cdk:path": "JMeterBatchStack/JmxParser/JmxParserFunction/LogRetention/Resource"
+   }
+  },
+  "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "JMeterBatchStack/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole/Resource"
+   }
+  },
+  "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRoleDefaultPolicyADDA7DEB": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:DeleteRetentionPolicy",
+        "logs:PutRetentionPolicy"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRoleDefaultPolicyADDA7DEB",
+    "Roles": [
+     {
+      "Ref": "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "JMeterBatchStack/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aFD4BFC8A": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Handler": "index.handler",
+    "Runtime": "nodejs22.x",
+    "Timeout": 900,
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-623035187488-us-east-1",
+     "S3Key": "2819175352ad1ce0dae768e83fc328fb70fb5f10b4a8ff0ccbcb791f02b0716d.zip"
+    },
+    "Role": {
+     "Fn::GetAtt": [
+      "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB",
+      "Arn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRoleDefaultPolicyADDA7DEB",
+    "LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "JMeterBatchStack/LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/Resource",
+    "aws:asset:path": "asset.2819175352ad1ce0dae768e83fc328fb70fb5f10b4a8ff0ccbcb791f02b0716d",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
   "StateMachineRoleB840431D": {
    "Type": "AWS::IAM::Role",
    "Properties": {
@@ -937,6 +1097,12 @@
         },
         {
          "Fn::GetAtt": [
+          "JmxParserJmxParserFunction06D3C1EE",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
           "MergeResultsFnC40E34AF",
           "Arn"
          ]
@@ -966,6 +1132,20 @@
            {
             "Fn::GetAtt": [
              "CheckJobsFnE7939F7A",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "JmxParserJmxParserFunction06D3C1EE",
              "Arn"
             ]
            },
@@ -1073,7 +1253,18 @@
          "Arn"
         ]
        },
-       "\",\"Payload.$\":\"$\"}},\"FilterExecutableTests\":{\"Type\":\"Pass\",\"Parameters\":{\"tests.$\":\"$.configResult.Payload.testSuite[?(@.execute==true)]\",\"runId.$\":\"$$.Execution.Name\"},\"Next\":\"PartitionData\"},\"PartitionData\":{\"Next\":\"SubmitJobs\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"ResultPath\":\"$.partitionResult\",\"Resource\":\"arn:",
+       "\",\"Payload.$\":\"$\"}},\"FilterExecutableTests\":{\"Type\":\"Pass\",\"Parameters\":{\"tests.$\":\"$.configResult.Payload.testSuite[?(@.execute==true)]\",\"runId.$\":\"$$.Execution.Name\"},\"Next\":\"ParseJMX\"},\"ParseJMX\":{\"Type\":\"Map\",\"ResultPath\":\"$.testsWithConfig\",\"Next\":\"TransformParsedTests\",\"ItemsPath\":\"$.tests\",\"MaxConcurrency\":5,\"Iterator\":{\"StartAt\":\"ParseJMXFile\",\"States\":{\"ParseJMXFile\":{\"End\":true,\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.error\",\"Next\":\"ParseJMXFailed\"}],\"Type\":\"Task\",\"ResultSelector\":{\"Payload.$\":\"$.Payload\"},\"Resource\":\"arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"",
+       {
+        "Fn::GetAtt": [
+         "JmxParserJmxParserFunction06D3C1EE",
+         "Arn"
+        ]
+       },
+       "\",\"Payload\":{\"testScript.$\":\"$.testScript\",\"testId.$\":\"$.testId\",\"execute.$\":\"$.execute\",\"configBucket\":\"jmeter-batch-config\"}}},\"ParseJMXFailed\":{\"Type\":\"Fail\",\"Error\":\"JMXParseError\",\"Cause\":\"Failed to parse JMX file\"}}}},\"TransformParsedTests\":{\"Type\":\"Pass\",\"Parameters\":{\"tests.$\":\"$.testsWithConfig[*].Payload\",\"runId.$\":\"$.runId\"},\"Next\":\"PartitionData\"},\"PartitionData\":{\"Next\":\"SubmitJobs\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"ResultPath\":\"$.partitionResult\",\"Resource\":\"arn:",
        {
         "Ref": "AWS::Partition"
        },
@@ -1084,7 +1275,7 @@
          "Arn"
         ]
        },
-       "\",\"Payload.$\":\"$\"}},\"SubmitJobs\":{\"Next\":\"CheckJobs\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"ResultPath\":\"$.jobsResult\",\"Resource\":\"arn:",
+       "\",\"Payload.$\":\"$\"}},\"SubmitJobs\":{\"Next\":\"WaitForJobsToRegister\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"ResultPath\":\"$.jobsResult\",\"Resource\":\"arn:",
        {
         "Ref": "AWS::Partition"
        },
@@ -1095,7 +1286,7 @@
          "Arn"
         ]
        },
-       "\",\"Payload.$\":\"$\"}},\"CheckJobs\":{\"Next\":\"JobsDone?\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"ResultPath\":\"$.checkResult\",\"Resource\":\"arn:",
+       "\",\"Payload.$\":\"$\"}},\"WaitForJobsToRegister\":{\"Type\":\"Wait\",\"Seconds\":180,\"Next\":\"CheckJobs\"},\"CheckJobs\":{\"Next\":\"JobsDone?\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"ResultPath\":\"$.checkResult\",\"Resource\":\"arn:",
        {
         "Ref": "AWS::Partition"
        },
@@ -1145,25 +1336,26 @@
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/2WO3U7rQAyEn4V715QCD3AoPwIVURokLit367QmyW609hah1b77UUJROTpXM/Y3Gs0MZ9dTnJ7Rp07ctpm0ssFcGbkG6FPXWS8x3yTXsMG89kf3LTekXIBdxLziPqhYiF9D6nQNeIa5Ypei2NdDDKkfEv89FpS8279x17dkXECow7wKLY99gy5DK26sP7lHr0be8TKGWlousCFze8zz2s9D1yfjO3+QGHzHftz/FDaviRMf/S3X4sUk+AJt2CnmRdidNh19gZa6zZYw3yfvhvRAf3wBvVyTKpvin0FAjfv6SHVtpI3iYmx49IfQ8L8BzEtShXcSgyo5x7yF+T6IY7gnaaEyMn4mtxc/zv59lwIr1pCiG9GSInVsHGEcUhntxO8G8pKsT1bAhy3jh54fZld4cY3Tsw8VmcTkTTrG1bf+BZvUFZwTAgAA"
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/1WQ3U7DMAyFn4V7z4wBDwDlR6AhoL3gcvIytzNtk6p2hlDUd0ftyt/V+exzYidZ4epyicsT+tCF29WLRraYCiNXA33oJuk5puvoajbISj/TUa5JeQB2Paacu6Biof8cU7/VaK8wFexiL/Z534fYjYl/jQGEWkx5aHg6PepLaMRNw440wJbM7TFlpc9C20XjW3+QPviW/XS1x7B9jRx55hsuxYtJ8AM0oVJM61D97P/hdahyNvZzkNrtjjDdRe/Gzhj95gH0fEOqbIpXo4Aad+Xs6sZIa8X1NOHBH0LN/wOYXkgVnqiDO5IG3kgMiugc8w6yfRDHUBgZP5Hbi5/e8bceBshZQ+wdw7S/MKrEV8cPn42s9M/RumgD+LBjfNfTw+oCzy5xefKuIos+epOWMT/qF0T0xQb+AQAA"
    },
    "Metadata": {
     "aws:cdk:path": "JMeterBatchStack/CDKMetadata/Default"
    }
   }
  },
- "Parameters": {
-  "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter": {
-   "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-   "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp2"
-  },
-  "BootstrapVersion": {
-   "Type": "AWS::SSM::Parameter::Value<String>",
-   "Default": "/cdk-bootstrap/hnb659fds/version",
-   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
-  }
- },
  "Outputs": {
+  "JmxParserJmxParserFunctionArn843E9B60": {
+   "Description": "ARN of the JMX Parser Lambda function",
+   "Value": {
+    "Fn::GetAtt": [
+     "JmxParserJmxParserFunction06D3C1EE",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "JmxParserFunctionArn"
+   }
+  },
   "ConfigBucketName": {
    "Description": "S3 bucket for test scripts and data",
    "Value": {
@@ -1262,6 +1454,13 @@
    "Export": {
     "Name": "JMeterBatch-JobDefinition"
    }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
   }
  },
  "Rules": {
