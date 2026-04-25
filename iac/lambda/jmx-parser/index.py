@@ -206,15 +206,21 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
         # Infinite loop or unknown
         test_details['estimatedDurationSeconds'] = estimated_duration_seconds
     
+    # Build result - only include duration OR iterations (not both with nulls)
     result = {
         'threads': num_threads,
-        'duration': duration,
-        'iterations': iterations,
         'numOfContainers': num_containers,
         'jvmArgs': jvm_args,
         'jmeterProperties': jmeter_properties,
         'testDetails': test_details
     }
+    
+    # Add EITHER duration OR iterations based on test type (not both)
+    if duration is not None:
+        result['duration'] = duration
+    
+    if iterations is not None:
+        result['iterations'] = iterations
     
     # Add dataFiles only if CSV files were found
     if data_files:
