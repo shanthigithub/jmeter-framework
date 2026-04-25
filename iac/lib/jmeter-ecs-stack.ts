@@ -388,14 +388,18 @@ export class JMeterEcsStack extends cdk.Stack {
       itemsPath: '$.tasksResult.Payload.tasks',
       resultPath: '$.syncResult',
       maxConcurrency: 5,
+      parameters: {
+        'test.$': '$$.Map.Item.Value',
+        'runId.$': '$.tasksResult.Payload.runId',
+      },
     }).iterator(
       new tasks.LambdaInvoke(this, 'WaitForReadyPerTest', {
         lambdaFunction: waitForReadyFn,
         payload: sfn.TaskInput.fromObject({
           'runId.$': '$.runId',
-          'testId.$': '$.testId',
-          'taskArns.$': '$.taskArns',
-          'expectedTaskCount.$': '$.numContainers',
+          'testId.$': '$.test.testId',
+          'taskArns.$': '$.test.taskArns',
+          'expectedTaskCount.$': '$.test.numContainers',
           'clusterArn': cluster.clusterArn,
           'configBucket': config.configBucket,
         }),
@@ -500,9 +504,4 @@ export class JMeterEcsStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'TaskDefinitionArn', {
-      value: taskDefinition.taskDefinitionArn,
-      description: 'ECS task definition ARN',
-      exportName: 'JMeterEcs-TaskDefinition',
-    });
-  }
-}
+    
