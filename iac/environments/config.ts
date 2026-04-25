@@ -14,7 +14,7 @@ export const config = {
   resultsBucket: 'jmeter-framework-results',
   
   // ECR
-  ecrRepoName: 'jmeter',
+  ecrRepoName: 'jmeter-framework',
   
   // ECS Fargate Configuration
   ecs: {
