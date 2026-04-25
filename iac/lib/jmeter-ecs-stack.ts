@@ -367,6 +367,7 @@ export class JMeterEcsStack extends cdk.Stack {
       parameters: {
         'tests.$': '$.testsWithConfig[*].Payload',
         'runId.$': '$.runId',
+        'enableDatadogMetrics.$': '$.enableDatadogMetrics',
       },
     });
 
