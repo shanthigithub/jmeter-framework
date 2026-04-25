@@ -61,9 +61,6 @@ echo ""
 # Expected format: jmeter -n -t s3://bucket/test.jmx -l /tmp/results.jtl ...
 JMETER_CMD=("$@")
 
-echo "[COMMAND] JMeter Command: ${JMETER_CMD[*]}"
-echo ""
-
 # Function to download S3 file with validation
 download_s3_file() {
     local s3_path=$1
@@ -202,8 +199,9 @@ while [ $i -lt ${#JMETER_CMD[@]} ]; do
         prev_arg="${JMETER_CMD[$((i-1))]}"
         
         if [ "$prev_arg" = "-t" ]; then
-            # Test plan file
-            local_file="/jmeter/scripts/test-plan.jmx"
+            # Test plan file - preserve original filename
+            filename=$(basename "$arg")
+            local_file="/tmp/${filename}"
             if ! download_s3_file "$arg" "$local_file"; then
                 DOWNLOAD_FAILED=1
                 echo ""
