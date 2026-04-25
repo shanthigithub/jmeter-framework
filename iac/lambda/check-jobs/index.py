@@ -6,6 +6,7 @@ Returns whether all jobs are complete or if any have failed.
 """
 import json
 import boto3
+import time
 
 batch = boto3.client('batch')
 
@@ -37,7 +38,19 @@ def lambda_handler(event, context):
     }
     """
     try:
+        # Extract jobs from the nested structure
+        # Step Functions passes jobsResult.Payload.jobs
         jobs_config = event.get('jobs', [])
+        
+        # If not found directly, try extracting from jobsResult
+        if not jobs_config and 'jobsResult' in event:
+            job_result = event['jobsResult']
+            if isinstance(job_result, dict) and 'Payload' in job_result:
+                payload = job_result['Payload']
+                if isinstance(payload, dict):
+                    jobs_config = payload.get('jobs', [])
+        
+        print(f"📊 Jobs config extracted: {len(jobs_config)} test(s)")
         
         if not jobs_config:
             print("⚠️  No jobs to check")
@@ -54,22 +67,49 @@ def lambda_handler(event, context):
             all_job_ids.extend(job_group.get('jobIds', []))
         
         if not all_job_ids:
-            print("⚠️  No job IDs found")
+            print("❌ ERROR: No job IDs found but jobs were expected")
             return {
-                'statusCode': 200,
-                'allJobsComplete': True,
-                'anyJobsFailed': False,
+                'statusCode': 500,
+                'error': 'NoJobsFound',
+                'message': 'Expected jobs to check but none were provided',
+                'allJobsComplete': False,
+                'anyJobsFailed': True,
                 'summary': {'total': 0, 'running': 0, 'succeeded': 0, 'failed': 0}
             }
         
         print(f"🔍 Checking status of {len(all_job_ids)} jobs")
         
         # Batch describe jobs (max 100 per call)
+        # Add retry logic to handle race condition where jobs aren't queryable yet
         job_details = []
         for i in range(0, len(all_job_ids), 100):
             batch_job_ids = all_job_ids[i:i+100]
-            response = batch.describe_jobs(jobs=batch_job_ids)
-            job_details.extend(response['jobs'])
+            
+            # Retry up to 3 times if jobs not found (race condition)
+            max_retries = 3
+            for attempt in range(max_retries):
+                response = batch.describe_jobs(jobs=batch_job_ids)
+                
+                if response['jobs']:
+                    job_details.extend(response['jobs'])
+                    break
+                elif attempt < max_retries - 1:
+                    print(f"⚠️  No jobs returned for batch, retrying in 2 seconds... (attempt {attempt+1}/{max_retries})")
+                    time.sleep(2)
+                else:
+                    print(f"⚠️  No jobs found after {max_retries} attempts for IDs: {batch_job_ids}")
+        
+        # Check if we actually got job details after retries
+        if not job_details and all_job_ids:
+            print(f"❌ ERROR: Expected {len(all_job_ids)} jobs but got 0 after retries")
+            return {
+                'statusCode': 500,
+                'error': 'JobsNotFound',
+                'message': f'Expected {len(all_job_ids)} jobs but describe_jobs returned none',
+                'allJobsComplete': False,
+                'anyJobsFailed': True,
+                'summary': {'total': 0, 'running': 0, 'succeeded': 0, 'failed': 0}
+            }
         
         # Analyze job statuses
         status_counts = {
