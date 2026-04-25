@@ -13,7 +13,38 @@ echo "=========================================="
 CONFIG_BUCKET="${CONFIG_BUCKET:-}"
 RESULTS_BUCKET="${RESULTS_BUCKET:-}"
 RESULTS_PREFIX="${RESULTS_PREFIX:-results}"
-JVM_ARGS="${JVM_ARGS:--Xms512m -Xmx2g}"
+
+# Calculate JVM memory dynamically (80% of container memory)
+if [ -z "$JVM_ARGS" ]; then
+    # Get total memory in MB from cgroup (works in Docker/ECS)
+    if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+        TOTAL_MEMORY_BYTES=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+    elif [ -f /sys/fs/cgroup/memory.max ]; then
+        # cgroup v2
+        TOTAL_MEMORY_BYTES=$(cat /sys/fs/cgroup/memory.max)
+    else
+        # Fallback to system memory
+        TOTAL_MEMORY_BYTES=$(free -b | awk '/^Mem:/ {print $2}')
+    fi
+    
+    # Convert to MB
+    TOTAL_MEMORY_MB=$((TOTAL_MEMORY_BYTES / 1024 / 1024))
+    
+    # Calculate 80% for max heap, 50% for initial heap
+    MAX_HEAP_MB=$((TOTAL_MEMORY_MB * 80 / 100))
+    INIT_HEAP_MB=$((TOTAL_MEMORY_MB * 50 / 100))
+    
+    # Ensure minimum viable heap sizes
+    if [ $MAX_HEAP_MB -lt 512 ]; then
+        MAX_HEAP_MB=512
+        INIT_HEAP_MB=256
+    fi
+    
+    JVM_ARGS="-Xms${INIT_HEAP_MB}m -Xmx${MAX_HEAP_MB}m"
+    echo "[JVM] Auto-calculated memory: Container=${TOTAL_MEMORY_MB}MB, JVM Max=${MAX_HEAP_MB}MB (80%), Init=${INIT_HEAP_MB}MB (50%)"
+else
+    echo "[JVM] Using custom JVM_ARGS: ${JVM_ARGS}"
+fi
 
 # Validate environment
 if [ -z "$CONFIG_BUCKET" ] || [ -z "$RESULTS_BUCKET" ]; then
