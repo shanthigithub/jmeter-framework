@@ -95,7 +95,7 @@ export class JMeterEcsStack extends cdk.Stack {
     // ═══════════════════════════════════════════════════════════════════════
 
     const cluster = new ecs.Cluster(this, 'JMeterCluster', {
-      clusterName: 'jmeter-cluster',
+      clusterName: 'jmeter-framework-cluster',
       vpc: vpc,
       containerInsights: true,  // Enable CloudWatch Container Insights
     });
