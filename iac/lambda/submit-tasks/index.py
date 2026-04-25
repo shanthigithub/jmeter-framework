@@ -78,14 +78,11 @@ def lambda_handler(event, context):
             task_arns = []
             
             for container_idx in range(num_containers):
-                # Build JMeter command
-                # NOTE: We do NOT pass -Jthreads or -Jduration because the JMX file
-                # already contains the correct configuration! Passing these would override
-                # the JMX settings and break iteration-based tests.
+                # Build simple JMeter command - S3 downloads handled by entrypoint via env vars
                 command = [
                     'jmeter',
                     '-n',  # Non-GUI mode
-                    '-t', f's3://{config_bucket}/{test_script}',  # Test plan from S3
+                    '-t', '/tmp/test.jmx',  # Local test plan (downloaded by entrypoint)
                     '-l', f'/tmp/results-{container_idx}.jtl',  # Results file
                     '-j', f'/tmp/jmeter-{container_idx}.log',  # JMeter log
                     # Distribution properties (for distributed test awareness)
@@ -93,10 +90,9 @@ def lambda_handler(event, context):
                     '-JtotalContainers', str(num_containers),
                 ]
                 
-                # Add data file if partitioned
+                # Add data file reference if partitioned (downloaded by entrypoint)
                 if data_partitions and container_idx < len(data_partitions):
-                    data_partition = data_partitions[container_idx]
-                    command.extend(['-JdataFile', f's3://{config_bucket}/{data_partition}'])
+                    command.extend(['-JdataFile', '/tmp/data.csv'])
                 
                 # Add custom JMeter properties
                 for prop_key, prop_value in jmeter_props.items():
@@ -107,7 +103,7 @@ def lambda_handler(event, context):
                 task_family = f"jmeter-{test_id}-{container_idx}-{timestamp}"
                 task_family = task_family.replace('_', '-')[:128]
                 
-                # Environment variables
+                # Environment variables - pass S3 paths for entrypoint to download
                 enable_sync = 'true' if num_containers > 1 else 'false'  # Enable sync for multi-container tests
                 
                 environment = [
@@ -118,8 +114,15 @@ def lambda_handler(event, context):
                     {'name': 'RESULTS_BUCKET', 'value': results_bucket},
                     {'name': 'RESULTS_PREFIX', 'value': f'{run_id}/{test_id}'},
                     {'name': 'JVM_ARGS', 'value': jvm_args},
-                    {'name': 'ENABLE_SYNC', 'value': enable_sync},  # Auto-enable for multi-container tests
+                    {'name': 'ENABLE_SYNC', 'value': enable_sync},
+                    # S3 paths for test files (downloaded by entrypoint)
+                    {'name': 'TEST_SCRIPT_S3', 'value': f's3://{config_bucket}/{test_script}'},
                 ]
+                
+                # Add data file S3 path if partitioned
+                if data_partitions and container_idx < len(data_partitions):
+                    data_partition = data_partitions[container_idx]
+                    environment.append({'name': 'DATA_FILE_S3', 'value': f's3://{config_bucket}/{data_partition}'})
                 
                 # Launch ECS Fargate task
                 try:

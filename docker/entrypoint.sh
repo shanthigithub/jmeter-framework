@@ -47,19 +47,22 @@ else
 fi
 
 # Validate environment
-if [ -z "$CONFIG_BUCKET" ] || [ -z "$RESULTS_BUCKET" ]; then
-    echo "❌ [ERROR] CONFIG_BUCKET and RESULTS_BUCKET must be set"
+if [ -z "$CONFIG_BUCKET" ] || [ -z "$RESULTS_BUCKET" ] || [ -z "$TEST_SCRIPT_S3" ]; then
+    echo "❌ [ERROR] Required environment variables not set:"
+    echo "   CONFIG_BUCKET=${CONFIG_BUCKET:-<not set>}"
+    echo "   RESULTS_BUCKET=${RESULTS_BUCKET:-<not set>}"
+    echo "   TEST_SCRIPT_S3=${TEST_SCRIPT_S3:-<not set>}"
     exit 1
 fi
 
 echo "[CONFIG] Config Bucket: s3://${CONFIG_BUCKET}"
 echo "[CONFIG] Results Bucket: s3://${RESULTS_BUCKET}"
+echo "[CONFIG] Test Script: ${TEST_SCRIPT_S3}"
+if [ -n "$DATA_FILE_S3" ]; then
+    echo "[CONFIG] Data File: ${DATA_FILE_S3}"
+fi
 echo "[CONFIG] JVM Args: ${JVM_ARGS}"
 echo ""
-
-# Parse JMeter command from arguments
-# Expected format: jmeter -n -t s3://bucket/test.jmx -l /tmp/results.jtl ...
-JMETER_CMD=("$@")
 
 # Function to download S3 file with validation
 download_s3_file() {
@@ -180,95 +183,33 @@ upload_results() {
     fi
 }
 
-# Process JMeter arguments and download S3 files
+# Download test files from S3 (using environment variables)
 echo "=========================================="
 echo "[DOWNLOAD] Downloading test files from S3"
 echo "=========================================="
 echo ""
 
-echo "[DEBUG] Arguments received by script: $#"
-echo "[DEBUG] JMETER_CMD array length: ${#JMETER_CMD[@]}"
-echo "[DEBUG] JMETER_CMD contents:"
-for ((idx=0; idx<${#JMETER_CMD[@]}; idx++)); do
-    echo "[DEBUG]   [$idx] = ${JMETER_CMD[$idx]}"
-done
-echo ""
-
-NEW_CMD=()
-DOWNLOAD_FAILED=0
-i=0
-
-echo "[DEBUG] Starting while loop to process arguments..."
-while [ $i -lt ${#JMETER_CMD[@]} ]; do
-    echo "[DEBUG] Loop iteration $i"
-    arg="${JMETER_CMD[$i]}"
-    echo "[DEBUG]   Processing: $arg"
-    
-    # Check if argument is an S3 path
-    echo "[DEBUG]   About to check if arg matches S3 pattern..."
-    if [[ $arg =~ ^s3:// ]]; then
-        echo "[DEBUG]   This is an S3 path!"
-        
-        # Determine file type from previous argument
-        prev_arg="${JMETER_CMD[$((i-1))]}"
-        echo "[DEBUG]   Previous argument: $prev_arg"
-        
-        if [ "$prev_arg" = "-t" ]; then
-            echo "[DEBUG]   Matched -t flag, this is test plan"
-            # Test plan file - preserve original filename
-            filename=$(basename "$arg")
-            echo "[DEBUG]   Extracted filename: $filename"
-            local_file="/tmp/${filename}"
-            echo "[DEBUG]   Local file path: $local_file"
-            echo "[DEBUG]   >>> CALLING download_s3_file function <<<"
-            if ! download_s3_file "$arg" "$local_file"; then
-                DOWNLOAD_FAILED=1
-                echo ""
-                echo "❌ [FATAL] Failed to download critical test plan file"
-                echo "Cannot proceed without test plan. Exiting..."
-                exit 1
-            fi
-            NEW_CMD+=("$local_file")
-        elif [[ $prev_arg =~ ^-J ]]; then
-            # JMeter property (e.g., -JdataFile s3://...)
-            filename=$(basename "$arg")
-            local_file="/jmeter/data/${filename}"
-            if ! download_s3_file "$arg" "$local_file"; then
-                DOWNLOAD_FAILED=1
-                echo ""
-                echo "⚠️  [WARNING] Failed to download data file, but continuing..."
-            fi
-            NEW_CMD+=("$local_file")
-        else
-            # Unknown S3 reference, download to generic location
-            filename=$(basename "$arg")
-            local_file="/jmeter/data/${filename}"
-            if ! download_s3_file "$arg" "$local_file"; then
-                DOWNLOAD_FAILED=1
-                echo ""
-                echo "⚠️  [WARNING] Failed to download file, but continuing..."
-            fi
-            NEW_CMD+=("$local_file")
-        fi
-    else
-        echo "[DEBUG]   Not an S3 path, adding as-is to NEW_CMD"
-        NEW_CMD+=("$arg")
-        echo "[DEBUG]   Successfully added to NEW_CMD"
-    fi
-    
-    echo "[DEBUG]   About to increment i from $i"
-    i=$((i + 1))
-    echo "[DEBUG]   i incremented to $i"
-done
-
-echo "[DEBUG] While loop completed successfully"
-
-echo ""
-if [ $DOWNLOAD_FAILED -eq 0 ]; then
-    echo "✅ [SUCCESS] All downloads complete"
-else
-    echo "⚠️  [WARNING] Some downloads failed, but proceeding with test"
+# Download test script (required)
+echo "📥 Downloading test script..."
+if ! download_s3_file "$TEST_SCRIPT_S3" "/tmp/test.jmx"; then
+    echo ""
+    echo "❌ [FATAL] Failed to download test script"
+    echo "Cannot proceed without test plan. Exiting..."
+    exit 1
 fi
+echo ""
+
+# Download data file (optional)
+if [ -n "$DATA_FILE_S3" ]; then
+    echo "📥 Downloading data file..."
+    if ! download_s3_file "$DATA_FILE_S3" "/tmp/data.csv"; then
+        echo ""
+        echo "⚠️  [WARNING] Failed to download data file, but continuing..."
+    fi
+    echo ""
+fi
+
+echo "✅ [SUCCESS] All required downloads complete"
 echo ""
 
 # Container Synchronization (optional)
@@ -335,19 +276,12 @@ export JVM_ARGS
 echo "=========================================="
 echo "[RUN] Running JMeter Test"
 echo "=========================================="
-echo "[DEBUG] Final command to execute:"
-echo "  ${NEW_CMD[@]}"
-echo ""
-echo "[DEBUG] Command breakdown:"
-for ((idx=0; idx<${#NEW_CMD[@]}; idx++)); do
-    echo "  [$idx] ${NEW_CMD[$idx]}"
-done
+echo "[COMMAND] $@"
 echo ""
 
 # Verify JMeter binary exists
 if command -v jmeter >/dev/null 2>&1; then
-    echo "[DEBUG] JMeter binary found: $(which jmeter)"
-    echo "[DEBUG] JMeter version:"
+    echo "[INFO] JMeter binary: $(which jmeter)"
     jmeter --version 2>&1 | head -3 || echo "  (version check failed)"
 else
     echo "❌ [ERROR] JMeter binary not found in PATH!"
@@ -356,10 +290,10 @@ else
 fi
 echo ""
 
-# Execute JMeter with modified command (capture all output)
-echo "[EXECUTE] Running: ${NEW_CMD[@]}"
+# Execute JMeter command
+echo "[EXECUTE] Starting JMeter..."
 echo ""
-if ${NEW_CMD[@]} 2>&1; then
+if "$@" 2>&1; then
     JMETER_EXIT_CODE=0
     echo ""
     echo "✅ [SUCCESS] JMeter test completed successfully"
@@ -367,7 +301,6 @@ else
     JMETER_EXIT_CODE=$?
     echo ""
     echo "❌ [ERROR] JMeter test failed with exit code: ${JMETER_EXIT_CODE}"
-    echo "[ERROR] Command that failed: ${NEW_CMD[@]}"
 fi
 
 echo ""
