@@ -257,7 +257,7 @@ while [ $i -lt ${#JMETER_CMD[@]} ]; do
     fi
     
     echo "[DEBUG]   About to increment i from $i"
-    ((i++))
+    i=$((i + 1))
     echo "[DEBUG]   i incremented to $i"
 done
 
