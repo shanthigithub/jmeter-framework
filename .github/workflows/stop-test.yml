@@ -54,7 +54,7 @@ jobs:
         id: get-outputs
         run: |
           STATE_MACHINE=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
             --output text)
           

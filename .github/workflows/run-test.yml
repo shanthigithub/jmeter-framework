@@ -55,17 +55,17 @@ jobs:
         run: |
           echo "::group::Querying CloudFormation stack"
           CONFIG_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`ConfigBucketName`].OutputValue' \
             --output text)
           
           RESULTS_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`ResultsBucketName`].OutputValue' \
             --output text)
           
           STATE_MACHINE=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
             --output text)
           
