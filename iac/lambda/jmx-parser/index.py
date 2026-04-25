@@ -378,6 +378,10 @@ def extract_user_defined_variables(root: ET.Element) -> Dict[str, str]:
     """
     Extract User Defined Variables from JMX for variable resolution.
     
+    Searches for variables in two locations:
+    1. User Defined Variables elements (config elements)
+    2. Test Plan arguments (variables defined at test plan level)
+    
     This is used internally to resolve variable references like ${testDuration}
     when parsing thread group configurations. These variables are NOT passed
     as -J parameters to JMeter (they stay in the JMX).
@@ -385,7 +389,7 @@ def extract_user_defined_variables(root: ET.Element) -> Dict[str, str]:
     
     variables = {}
     
-    # Look for User Defined Variables elements
+    # 1. Look for User Defined Variables elements (config elements in test plan tree)
     for elem in root.iter():
         if elem.get('testclass') == 'Arguments' and elem.get('testname') == 'User Defined Variables':
             for arg in elem.findall('.//elementProp'):
@@ -395,7 +399,24 @@ def extract_user_defined_variables(root: ET.Element) -> Dict[str, str]:
                 if name and value_elem is not None:
                     value = value_elem.text or ''
                     variables[name] = value
-                    print(f"  └─ Variable: {name} = {value}")
+                    print(f"  └─ Variable (User Defined): {name} = {value}")
+    
+    # 2. Look for variables defined at Test Plan level
+    for elem in root.iter():
+        if elem.get('testclass') == 'TestPlan':
+            # Look for Arguments element within TestPlan
+            args_elem = elem.find('.//Arguments')
+            if args_elem is not None:
+                for arg in args_elem.findall('.//elementProp'):
+                    name = arg.get('name')
+                    value_elem = arg.find('.//stringProp[@name="Argument.value"]')
+                    
+                    if name and value_elem is not None:
+                        value = value_elem.text or ''
+                        # Don't override if already found in User Defined Variables
+                        if name not in variables:
+                            variables[name] = value
+                            print(f"  └─ Variable (Test Plan): {name} = {value}")
     
     return variables
 
