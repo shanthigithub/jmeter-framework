@@ -126,20 +126,34 @@ download_s3_file() {
         
         # Now download the file
         echo "  [DOWNLOAD] s3://${bucket}/${key} → ${local_path}"
+        echo "  [AWS CLI] Running: aws s3 cp s3://${bucket}/${key} ${local_path}"
         
-        if aws s3 cp "s3://${bucket}/${key}" "${local_path}" 2>&1; then
+        # Run download and capture output
+        download_output=$(aws s3 cp "s3://${bucket}/${key}" "${local_path}" 2>&1)
+        download_exit=$?
+        
+        # Show AWS CLI output if any
+        if [ -n "$download_output" ]; then
+            echo "  [AWS CLI OUTPUT] $download_output"
+        fi
+        
+        if [ $download_exit -eq 0 ]; then
             # Verify download succeeded
             if [ -f "${local_path}" ]; then
                 local file_size=$(stat -c%s "${local_path}" 2>/dev/null || stat -f%z "${local_path}" 2>/dev/null || echo "0")
                 echo "  ✅ [SUCCESS] Downloaded ${file_size} bytes to: ${local_path}"
+                ls -lh "${local_path}" | awk '{print "  [FILE INFO] " $0}'
                 return 0
             else
-                echo "  ❌ [ERROR] Download completed but file not found: ${local_path}"
+                echo "  ❌ [ERROR] Download exit code 0 but file not found: ${local_path}"
+                echo "  [DEBUG] Listing directory:"
+                ls -la "$(dirname ${local_path})" 2>&1 | head -20
                 return 1
             fi
         else
-            echo "  ❌ [ERROR] AWS CLI failed to download: s3://${bucket}/${key}"
-            echo "  [HINT] Check CloudWatch Logs (/ecs/jmeter) for detailed AWS CLI error"
+            echo "  ❌ [ERROR] AWS CLI failed with exit code: $download_exit"
+            echo "  [ERROR] Failed to download: s3://${bucket}/${key}"
+            echo "  [HINT] Check task role IAM permissions and S3 bucket policy"
             return 1
         fi
     else
