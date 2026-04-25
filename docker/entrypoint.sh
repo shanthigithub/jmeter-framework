@@ -205,6 +205,7 @@ while [ $i -lt ${#JMETER_CMD[@]} ]; do
     echo "[DEBUG]   Processing: $arg"
     
     # Check if argument is an S3 path
+    echo "[DEBUG]   About to check if arg matches S3 pattern..."
     if [[ $arg =~ ^s3:// ]]; then
         echo "[DEBUG]   This is an S3 path!"
         
@@ -250,11 +251,17 @@ while [ $i -lt ${#JMETER_CMD[@]} ]; do
             NEW_CMD+=("$local_file")
         fi
     else
+        echo "[DEBUG]   Not an S3 path, adding as-is to NEW_CMD"
         NEW_CMD+=("$arg")
+        echo "[DEBUG]   Successfully added to NEW_CMD"
     fi
     
+    echo "[DEBUG]   About to increment i from $i"
     ((i++))
+    echo "[DEBUG]   i incremented to $i"
 done
+
+echo "[DEBUG] While loop completed successfully"
 
 echo ""
 if [ $DOWNLOAD_FAILED -eq 0 ]; then
