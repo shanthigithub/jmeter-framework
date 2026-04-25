@@ -4,25 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       test_config:
-        description: 'Test configuration file'
+        description: '1. Select JSON configuration file'
         required: true
         default: 'dcp-api-test.json'
         type: choice
         options:
           - 'dcp-api-test.json'
           - 'test-suite.json'
-      test_id:
-        description: 'Specific test ID to run (leave empty to run all)'
-        required: false
-        default: ''
-      wait_for_completion:
-        description: 'Wait for test to complete'
-        required: false
-        default: 'true'
+      enable_datadog_metrics:
+        description: '2. Send metrics to Datadog?'
+        required: true
+        default: 'yes'
         type: choice
         options:
-          - 'true'
-          - 'false'
+          - 'yes'
+          - 'no'
 
 env:
   AWS_REGION: us-east-1
@@ -105,20 +101,18 @@ jobs:
           echo "::group::Starting Step Functions execution"
           STATE_MACHINE="${{ steps.get-outputs.outputs.state_machine }}"
           CONFIG_KEY="config/${{ github.event.inputs.test_config }}"
-          TEST_ID="${{ github.event.inputs.test_id }}"
+          ENABLE_DATADOG="${{ github.event.inputs.enable_datadog_metrics }}"
           
           # Create execution name with timestamp
           EXECUTION_NAME="test-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_NUMBER}"
           
-          # Build input JSON
-          if [ -z "$TEST_ID" ]; then
-            INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\"}"
-          else
-            INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\", \"testId\": \"$TEST_ID\"}"
-          fi
+          # Build input JSON with Datadog flag
+          INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\", \"enableDatadogMetrics\": \"$ENABLE_DATADOG\"}"
           
           echo "🚀 Starting execution: $EXECUTION_NAME"
-          echo "📋 Input: $INPUT_JSON"
+          echo "📋 Config: ${{ github.event.inputs.test_config }}"
+          echo "🐶 Datadog Metrics: $ENABLE_DATADOG"
+          echo ""
           
           EXECUTION_ARN=$(aws stepfunctions start-execution \
             --state-machine-arn $STATE_MACHINE \
@@ -142,7 +136,6 @@ jobs:
           echo "console_url=$CONSOLE_URL" >> $GITHUB_OUTPUT
       
       - name: ⏳ Stage 6/7 - Monitor execution
-        if: github.event.inputs.wait_for_completion == 'true'
         run: |
           echo "::group::Monitoring Step Functions execution"
           EXECUTION_ARN="${{ steps.start-execution.outputs.execution_arn }}"
@@ -229,7 +222,6 @@ jobs:
           done
       
       - name: 📊 Stage 7/7 - Get results location
-        if: github.event.inputs.wait_for_completion == 'true'
         run: |
           echo "::group::Results information"
           RESULTS_BUCKET="${{ steps.get-outputs.outputs.results_bucket }}"
@@ -260,11 +252,7 @@ jobs:
           echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Execution Name** | \`${{ steps.start-execution.outputs.execution_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Configuration** | \`${{ github.event.inputs.test_config }}\` |" >> $GITHUB_STEP_SUMMARY
-          
-          if [ ! -z "${{ github.event.inputs.test_id }}" ]; then
-            echo "| **Test ID** | \`${{ github.event.inputs.test_id }}\` |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
+          echo "| **Datadog Metrics** | \`${{ github.event.inputs.enable_datadog_metrics }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Region** | \`${{ env.AWS_REGION }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Status** | ✅ Started |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
