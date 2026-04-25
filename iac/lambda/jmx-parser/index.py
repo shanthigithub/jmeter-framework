@@ -91,6 +91,10 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     
     root = ET.fromstring(jmx_content)
     
+    # Extract User Defined Variables FIRST for variable resolution
+    user_variables = extract_user_defined_variables(root)
+    print(f"📝 Found {len(user_variables)} user-defined variable(s): {list(user_variables.keys())}")
+    
     # Find ALL ThreadGroup elements
     thread_groups = find_all_thread_groups(root)
     
@@ -110,13 +114,15 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     for i, thread_group in enumerate(thread_groups, 1):
         tg_name = thread_group.get('testname', f'Thread Group {i}')
         
-        # Extract thread count
+        # Extract thread count (resolve variables)
         tg_threads = get_element_value(thread_group, 'stringProp', 'ThreadGroup.num_threads', default='1')
+        tg_threads = resolve_variable(tg_threads, user_variables)
         tg_threads = int(tg_threads)
         total_threads += tg_threads
         
-        # Extract ramp-up time
+        # Extract ramp-up time (resolve variables)
         tg_ramp = get_element_value(thread_group, 'stringProp', 'ThreadGroup.ramp_time', default='1')
+        tg_ramp = resolve_variable(tg_ramp, user_variables)
         tg_ramp = int(tg_ramp)
         max_ramp_time = max(max_ramp_time, tg_ramp)
         
@@ -127,6 +133,8 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
         if tg_use_scheduler:
             use_scheduler = True
             tg_duration = get_element_value(thread_group, 'stringProp', 'ThreadGroup.duration', default='300')
+            # Resolve duration variable if present (e.g., ${testDuration})
+            tg_duration = resolve_variable(tg_duration, user_variables)
             max_duration_seconds = max(max_duration_seconds, int(tg_duration))
         else:
             # Iteration-based
@@ -366,6 +374,62 @@ def parse_duration_to_seconds(duration: str) -> int:
     return total_seconds if total_seconds > 0 else 300
 
 
+def extract_user_defined_variables(root: ET.Element) -> Dict[str, str]:
+    """
+    Extract User Defined Variables from JMX for variable resolution.
+    
+    This is used internally to resolve variable references like ${testDuration}
+    when parsing thread group configurations. These variables are NOT passed
+    as -J parameters to JMeter (they stay in the JMX).
+    """
+    
+    variables = {}
+    
+    # Look for User Defined Variables elements
+    for elem in root.iter():
+        if elem.get('testclass') == 'Arguments' and elem.get('testname') == 'User Defined Variables':
+            for arg in elem.findall('.//elementProp'):
+                name = arg.get('name')
+                value_elem = arg.find('.//stringProp[@name="Argument.value"]')
+                
+                if name and value_elem is not None:
+                    value = value_elem.text or ''
+                    variables[name] = value
+                    print(f"  └─ Variable: {name} = {value}")
+    
+    return variables
+
+
+def resolve_variable(value: str, variables: Dict[str, str]) -> str:
+    """
+    Resolve JMeter variable references in a value.
+    
+    Examples:
+        "${testDuration}" with variables={'testDuration': '300'} → "300"
+        "100" → "100" (no change)
+        "${threads}" with variables={'threads': '50'} → "50"
+    """
+    
+    if not value or not isinstance(value, str):
+        return value
+    
+    # Check if value is a variable reference: ${variableName}
+    var_pattern = r'\$\{([^}]+)\}'
+    match = re.search(var_pattern, value)
+    
+    if match:
+        var_name = match.group(1)
+        if var_name in variables:
+            resolved_value = variables[var_name]
+            print(f"  🔄 Resolved variable: ${{{var_name}}} → {resolved_value}")
+            return resolved_value
+        else:
+            print(f"  ⚠️  Variable ${{{var_name}}} not found in User Defined Variables, using as-is")
+            return value
+    
+    return value
+
+
 def extract_properties(root: ET.Element) -> Dict[str, Any]:
     """Extract user-defined properties from JMX file.
     
@@ -384,26 +448,6 @@ def extract_properties(root: ET.Element) -> Dict[str, Any]:
     
     # If you need to pass custom properties, add them to the test config's
     # "jmeterProperties" field instead of relying on auto-extraction.
-    
-    # Old code (now disabled):
-    # for elem in root.iter():
-    #     if elem.get('testclass') == 'Arguments' and elem.get('testname') == 'User Defined Variables':
-    #         for arg in elem.findall('.//elementProp'):
-    #             name = arg.get('name')
-    #             value_elem = arg.find('.//stringProp[@name="Argument.value"]')
-    #             
-    #             if name and value_elem is not None:
-    #                 value = value_elem.text or ''
-    #                 
-    #                 # Try to convert to appropriate type
-    #                 if value.lower() in ['true', 'false']:
-    #                     properties[name] = value.lower() == 'true'
-    #                 elif value.isdigit():
-    #                     properties[name] = int(value)
-    #                 elif re.match(r'^\d+\.\d+$', value):
-    #                     properties[name] = float(value)
-    #                 else:
-    #                     properties[name] = value
     
     return properties
 
