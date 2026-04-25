@@ -6,14 +6,15 @@ FROM alpine:3.19
 # JMeter version
 ARG JMETER_VERSION=5.6.3
 
-# Install dependencies
+# Install dependencies including Datadog agent
 RUN apk add --no-cache \
     openjdk17-jre \
     curl \
     bash \
     python3 \
     py3-pip \
-    && pip3 install --break-system-packages --no-cache-dir awscli
+    && pip3 install --break-system-packages --no-cache-dir awscli \
+    && pip3 install --break-system-packages --no-cache-dir datadog
 
 # Download and install JMeter
 RUN mkdir /opt/jmeter \
@@ -52,7 +53,17 @@ RUN cd /opt/jmeter/lib/ext \
     # Download dependencies for plugins
     && curl -L https://repo1.maven.org/maven2/kg/apc/perfmon/2.2.2/perfmon-2.2.2.jar -o perfmon-2.2.2.jar \
     && curl -L https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar -o commons-pool2-2.11.1.jar \
-    && curl -L https://repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.12.0/commons-lang3-3.12.0.jar -o commons-lang3-3.12.0.jar
+    && curl -L https://repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.12.0/commons-lang3-3.12.0.jar -o commons-lang3-3.12.0.jar \
+    # Install Datadog Backend Listener for JMeter
+    && curl -L https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-graphs-basic/2.0/jmeter-plugins-graphs-basic-2.0.jar -o jmeter-plugins-graphs-basic-2.0.jar
+
+# Download DogStatsD standalone binary (lightweight Datadog agent for metrics)
+RUN curl -L https://github.com/DataDog/datadog-agent/releases/download/7.50.3/datadog-dogstatsd-amd64-7.50.3 \
+    -o /usr/local/bin/dogstatsd \
+    && chmod +x /usr/local/bin/dogstatsd
+
+# Create Datadog configuration directory
+RUN mkdir -p /etc/datadog
 
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
