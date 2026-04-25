@@ -367,29 +367,43 @@ def parse_duration_to_seconds(duration: str) -> int:
 
 
 def extract_properties(root: ET.Element) -> Dict[str, Any]:
-    """Extract user-defined properties from JMX file."""
+    """Extract user-defined properties from JMX file.
+    
+    NOTE: We NO LONGER auto-extract User Defined Variables from the JMX file.
+    Variables defined in the JMX should stay in the JMX - passing them as -J 
+    parameters overrides the JMX values and can cause unexpected behavior.
+    
+    Only extract properties explicitly defined in the config file's jmeterProperties.
+    """
     
     properties = {}
     
-    # Look for User Defined Variables
-    for elem in root.iter():
-        if elem.get('testclass') == 'Arguments' and elem.get('testname') == 'User Defined Variables':
-            for arg in elem.findall('.//elementProp'):
-                name = arg.get('name')
-                value_elem = arg.find('.//stringProp[@name="Argument.value"]')
-                
-                if name and value_elem is not None:
-                    value = value_elem.text or ''
-                    
-                    # Try to convert to appropriate type
-                    if value.lower() in ['true', 'false']:
-                        properties[name] = value.lower() == 'true'
-                    elif value.isdigit():
-                        properties[name] = int(value)
-                    elif re.match(r'^\d+\.\d+$', value):
-                        properties[name] = float(value)
-                    else:
-                        properties[name] = value
+    # DISABLED: Auto-extraction of JMX User Defined Variables
+    # The JMX file already contains these variables - passing them again as
+    # -J parameters is redundant and can override the JMX configuration.
+    
+    # If you need to pass custom properties, add them to the test config's
+    # "jmeterProperties" field instead of relying on auto-extraction.
+    
+    # Old code (now disabled):
+    # for elem in root.iter():
+    #     if elem.get('testclass') == 'Arguments' and elem.get('testname') == 'User Defined Variables':
+    #         for arg in elem.findall('.//elementProp'):
+    #             name = arg.get('name')
+    #             value_elem = arg.find('.//stringProp[@name="Argument.value"]')
+    #             
+    #             if name and value_elem is not None:
+    #                 value = value_elem.text or ''
+    #                 
+    #                 # Try to convert to appropriate type
+    #                 if value.lower() in ['true', 'false']:
+    #                     properties[name] = value.lower() == 'true'
+    #                 elif value.isdigit():
+    #                     properties[name] = int(value)
+    #                 elif re.match(r'^\d+\.\d+$', value):
+    #                     properties[name] = float(value)
+    #                 else:
+    #                     properties[name] = value
     
     return properties
 
