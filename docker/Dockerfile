@@ -61,12 +61,10 @@ RUN cd /opt/jmeter/lib/ext \
 RUN mkdir -p /usr/local/bin /etc/datadog
 
 # Create Python DogStatsD forwarder
-RUN cat > /usr/local/bin/dogstatsd-forwarder.py << 'EOF'
+RUN cat > /usr/local/bin/dogstatsd-forwarder.py << 'DOGSTATSD_SCRIPT'
 #!/usr/bin/env python3
-"""
-Lightweight DogStatsD-compatible metrics forwarder
-Reads JMeter metrics from stdin and forwards to Datadog
-"""
+# Lightweight DogStatsD-compatible metrics forwarder
+# Reads JMeter metrics from stdin and forwards to Datadog
 import os
 import sys
 import time
@@ -132,7 +130,7 @@ for line in sys.stdin:
             print(f"📈 Metrics sent: throughput={throughput}/s, avg={avg_time}ms, errors={error_pct}%", flush=True)
 
 print("🐶 DogStatsD forwarder stopped", flush=True)
-EOF
+DOGSTATSD_SCRIPT
 
 RUN chmod +x /usr/local/bin/dogstatsd-forwarder.py
 
