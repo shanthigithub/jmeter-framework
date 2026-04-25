@@ -29,6 +29,16 @@ RUN mkdir /opt/jmeter \
 ENV PATH="/opt/jmeter/bin:${PATH}"
 ENV JMETER_HOME="/opt/jmeter"
 
+# Install JMeter Plugins Manager and common plugins
+RUN cd /opt/jmeter/lib/ext \
+    # Download Plugins Manager
+    && curl -L https://jmeter-plugins.org/get/ -o jmeter-plugins-manager.jar \
+    # Download Command-line runner for plugin installation
+    && curl -L https://repo1.maven.org/maven2/kg/apc/cmdrunner/2.3/cmdrunner-2.3.jar -o cmdrunner-2.3.jar \
+    && java -cp cmdrunner-2.3.jar kg.apc.cmdrunner.PluginsManagerCMD install-all-except jpgc-hadoop,jpgc-oauth,ulp-jmeter-autocorrelator-plugin,ulp-jmeter-videostreaming-plugin,ulp-jmeter-gwt-plugin,tilln-iso8583 \
+    # Clean up
+    && rm -f cmdrunner-2.3.jar
+
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
 
