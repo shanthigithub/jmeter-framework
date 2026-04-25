@@ -1,4 +1,4 @@
-name: Deploy JMeter Batch Framework
+name: Deploy JMeter ECS Framework
 
 on:
   push:
@@ -18,7 +18,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: jmeter-batch
+  ECR_REPOSITORY: jmeter
 
 jobs:
   build-and-push-image:
@@ -109,17 +109,17 @@ jobs:
         run: |
           cd iac
           CONFIG_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`ConfigBucketName`].OutputValue' \
             --output text)
           
           RESULTS_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`ResultsBucketName`].OutputValue' \
             --output text)
           
           STATE_MACHINE=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
             --output text)
           
@@ -155,7 +155,7 @@ jobs:
       - name: Upload test configuration
         run: |
           CONFIG_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`ConfigBucketName`].OutputValue' \
             --output text)
           
@@ -183,7 +183,7 @@ jobs:
         id: start-execution
         run: |
           STATE_MACHINE=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
+            --stack-name JMeterEcsStack \
             --query 'Stacks[0].Outputs[?OutputKey==`StateMachineArn`].OutputValue' \
             --output text)
           
