@@ -212,6 +212,73 @@ fi
 echo "✅ [SUCCESS] All required downloads complete"
 echo ""
 
+# ═══════════════════════════════════════════════════════════════════════════
+# DATADOG METRICS (Optional)
+# ═══════════════════════════════════════════════════════════════════════════
+if [ "${ENABLE_DATADOG_METRICS:-false}" = "true" ]; then
+    echo "=========================================="
+    echo "[DATADOG] Starting DogStatsD Agent"
+    echo "=========================================="
+    
+    # Validate DD_API_KEY is provided
+    if [ -z "$DD_API_KEY" ]; then
+        echo "⚠️  [WARNING] ENABLE_DATADOG_METRICS=true but DD_API_KEY not set"
+        echo "⚠️  [WARNING] Datadog metrics will NOT be sent"
+        echo "⚠️  [HINT] Set DD_API_KEY in ECS task definition environment variables"
+        echo ""
+    else
+        # Set Datadog site (default to US)
+        DD_SITE="${DD_SITE:-datadoghq.com}"
+        
+        # Create DogStatsD configuration
+        cat > /etc/datadog/dogstatsd.yaml <<EOF
+api_key: ${DD_API_KEY}
+hostname: jmeter-${TEST_ID}-${CONTAINER_ID}
+dogstatsd_port: 8125
+site: ${DD_SITE}
+tags:
+  - test_id:${TEST_ID}
+  - run_id:${RUN_ID}
+  - container:${CONTAINER_ID}
+  - env:performance-testing
+EOF
+
+        # Start DogStatsD in background
+        echo "[DATADOG] Configuration:"
+        echo "  Site: ${DD_SITE}"
+        echo "  Hostname: jmeter-${TEST_ID}-${CONTAINER_ID}"
+        echo "  Tags: test_id:${TEST_ID}, run_id:${RUN_ID}, container:${CONTAINER_ID}"
+        echo ""
+        echo "[DATADOG] Starting DogStatsD daemon..."
+        
+        # Start DogStatsD and redirect output to log file
+        nohup /usr/local/bin/dogstatsd -c /etc/datadog/dogstatsd.yaml > /tmp/dogstatsd.log 2>&1 &
+        DOGSTATSD_PID=$!
+        
+        # Give it a moment to start
+        sleep 2
+        
+        # Verify it started
+        if ps -p $DOGSTATSD_PID > /dev/null 2>&1; then
+            echo "✅ [DATADOG] DogStatsD started successfully (PID: ${DOGSTATSD_PID})"
+            echo "[DATADOG] Metrics will be sent to: ${DD_SITE}"
+            echo "[DATADOG] Logs: /tmp/dogstatsd.log"
+        else
+            echo "❌ [ERROR] DogStatsD failed to start"
+            echo "[ERROR] Check logs: /tmp/dogstatsd.log"
+            if [ -f /tmp/dogstatsd.log ]; then
+                echo "[ERROR] Last 10 lines of DogStatsD log:"
+                tail -10 /tmp/dogstatsd.log
+            fi
+            echo "⚠️  [WARNING] Continuing without Datadog metrics..."
+        fi
+        echo ""
+    fi
+else
+    echo "[DATADOG] Metrics disabled (ENABLE_DATADOG_METRICS=${ENABLE_DATADOG_METRICS:-false})"
+    echo ""
+fi
+
 # Container Synchronization (optional)
 # If ENABLE_SYNC=true, wait for START signal from coordinator before running test
 if [ "${ENABLE_SYNC:-false}" = "true" ]; then

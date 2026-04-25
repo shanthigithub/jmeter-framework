@@ -8,6 +8,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { config } from '../environments/config';
 import * as path from 'path';
@@ -194,6 +195,26 @@ export class JMeterEcsStack extends cdk.Stack {
       executionRole: taskExecutionRole,
     });
 
+    // Import Datadog secret from Secrets Manager (if configured)
+    // Secret should contain JSON: { "apiKey": "your-key", "site": "datadoghq.com" }
+    let containerSecrets: { [key: string]: ecs.Secret } | undefined;
+    
+    if (config.datadog?.secretName) {
+      const datadogSecret = secretsmanager.Secret.fromSecretNameV2(
+        this, 
+        'DatadogSecret', 
+        config.datadog.secretName
+      );
+      
+      // Grant read permission to task execution role
+      datadogSecret.grantRead(taskExecutionRole);
+      
+      containerSecrets = {
+        DD_API_KEY: ecs.Secret.fromSecretsManager(datadogSecret, 'apiKey'),
+        DD_SITE: ecs.Secret.fromSecretsManager(datadogSecret, 'site'),
+      };
+    }
+
     // Add container to task definition
     const container = taskDefinition.addContainer('jmeter', {
       image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
@@ -206,6 +227,8 @@ export class JMeterEcsStack extends cdk.Stack {
         RESULTS_BUCKET: config.resultsBucket,
         AWS_REGION: this.region,
       },
+      // Datadog credentials from AWS Secrets Manager (secure approach)
+      secrets: containerSecrets,
       // Command will be overridden by Lambda when running tasks
       command: ['echo', 'JMeter container - command will be set by Lambda'],
     });

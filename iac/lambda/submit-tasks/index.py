@@ -119,6 +119,15 @@ def lambda_handler(event, context):
                     {'name': 'TEST_SCRIPT_S3', 'value': f's3://{config_bucket}/{test_script}'},
                 ]
                 
+                # Add Datadog configuration if enabled
+                enable_datadog = event.get('enableDatadogMetrics', False)
+                if enable_datadog:
+                    environment.append({'name': 'ENABLE_DATADOG_METRICS', 'value': 'true'})
+                    # DD_API_KEY and DD_SITE should be set in task definition environment or SSM Parameter Store
+                    # We don't pass them here to avoid exposing secrets in Step Functions execution history
+                else:
+                    environment.append({'name': 'ENABLE_DATADOG_METRICS', 'value': 'false'})
+                
                 # Add data file S3 path if partitioned
                 if data_partitions and container_idx < len(data_partitions):
                     data_partition = data_partitions[container_idx]

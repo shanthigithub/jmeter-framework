@@ -58,10 +58,11 @@ export const config = {
     enableVpcEndpoints: false,  // Set true for production (extra cost)
   },
   
-  // Monitoring
-  monitoring: {
-    enableDatadog: false,    // Optional: Enable Datadog integration
-    datadogSite: 'us5.datadoghq.com',
+  // Datadog Integration (Optional)
+  // Credentials stored in AWS Secrets Manager for security
+  datadog: {
+    secretName: 'datadog/api-credentials',  // AWS Secrets Manager secret name
+    // Secret should contain: { "apiKey": "your-key", "site": "datadoghq.com" }
   },
 };
 
