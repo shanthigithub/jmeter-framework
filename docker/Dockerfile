@@ -66,22 +66,17 @@ RUN cat > /usr/local/bin/dogstatsd-forwarder.py <<'DOGSTATSD_SCRIPT'
 import os
 import sys
 import re
-from datadog import initialize, statsd
+import time
+from datadog import initialize, api
 
 # Initialize Datadog
-options = {
-    'api_key': os.environ.get('DD_API_KEY'),
-    'app_key': None,
-    'statsd_host': '127.0.0.1',
-    'statsd_port': 8125,
-}
-
-# Get Datadog site from environment
+dd_api_key = os.environ.get('DD_API_KEY')
 dd_site = os.environ.get('DD_SITE', 'datadoghq.com')
-if dd_site:
-    options['api_host'] = f'https://api.{dd_site}'
 
-initialize(**options)
+initialize(
+    api_key=dd_api_key,
+    api_host=f'https://api.{dd_site}'
+)
 
 # Get tags from environment
 test_id = os.environ.get('TEST_ID', 'unknown')
@@ -116,13 +111,23 @@ for line in sys.stdin:
             errors = int(match.group(5))
             error_pct = float(match.group(6))
             
-            # Send metrics to Datadog
-            statsd.gauge('jmeter.throughput', throughput, tags=base_tags)
-            statsd.gauge('jmeter.response_time.avg', avg_time, tags=base_tags)
-            statsd.gauge('jmeter.response_time.min', min_time, tags=base_tags)
-            statsd.gauge('jmeter.response_time.max', max_time, tags=base_tags)
-            statsd.gauge('jmeter.errors', errors, tags=base_tags)
-            statsd.gauge('jmeter.error_rate', error_pct, tags=base_tags)
+            # Send metrics to Datadog via HTTP API
+            now = int(time.time())
+            
+            metrics = [
+                {'metric': 'jmeter.throughput', 'points': [(now, throughput)], 'tags': base_tags},
+                {'metric': 'jmeter.response_time.avg', 'points': [(now, avg_time)], 'tags': base_tags},
+                {'metric': 'jmeter.response_time.min', 'points': [(now, min_time)], 'tags': base_tags},
+                {'metric': 'jmeter.response_time.max', 'points': [(now, max_time)], 'tags': base_tags},
+                {'metric': 'jmeter.errors', 'points': [(now, errors)], 'tags': base_tags},
+                {'metric': 'jmeter.error_rate', 'points': [(now, error_pct)], 'tags': base_tags},
+            ]
+            
+            try:
+                api.Metric.send(metrics)
+            except Exception as e:
+                print(f"❌ Error sending metrics: {e}", flush=True)
+                continue
             
             print(f"📈 Metrics sent: throughput={throughput}/s, avg={avg_time}ms, errors={error_pct}%", flush=True)
 
