@@ -333,6 +333,7 @@ export class JMeterEcsStack extends cdk.Stack {
       parameters: {
         'tests.$': '$.configResult.Payload.testSuite[?(@.execute==true)]',
         'runId.$': '$$.Execution.Name',
+        'enableDatadogMetrics.$': '$.enableDatadogMetrics',
       },
     });
 
@@ -366,6 +367,7 @@ export class JMeterEcsStack extends cdk.Stack {
       parameters: {
         'tests.$': '$.testsWithConfig[*].Payload',
         'runId.$': '$.runId',
+        'enableDatadogMetrics.$': '$.enableDatadogMetrics',
       },
     });
 
