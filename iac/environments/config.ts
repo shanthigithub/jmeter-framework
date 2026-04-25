@@ -10,8 +10,8 @@ export const config = {
   region: 'us-east-1',
   
   // S3 Buckets
-  configBucket: 'jmeter-config',
-  resultsBucket: 'jmeter-results',
+  configBucket: 'jmeter-framework-config',
+  resultsBucket: 'jmeter-framework-results',
   
   // ECR
   ecrRepoName: 'jmeter',
