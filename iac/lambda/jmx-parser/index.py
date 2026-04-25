@@ -186,6 +186,26 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     # Auto-detect CSV data files referenced in JMX
     data_files = extract_csv_data_files(root)
     
+    # Build testDetails dynamically based on test type
+    test_details = {
+        'threadGroupName': thread_group_name,
+        'rampTime': ramp_time,
+        'scheduler': use_scheduler,
+    }
+    
+    # Add EITHER duration OR iterations (not both) based on what's configured
+    if use_scheduler and duration:
+        # Duration-based test
+        test_details['duration'] = duration
+        test_details['estimatedDurationSeconds'] = estimated_duration_seconds
+    elif iterations is not None:
+        # Iteration-based test
+        test_details['iterations'] = iterations
+        test_details['estimatedDurationSeconds'] = estimated_duration_seconds
+    else:
+        # Infinite loop or unknown
+        test_details['estimatedDurationSeconds'] = estimated_duration_seconds
+    
     result = {
         'threads': num_threads,
         'duration': duration,
@@ -193,12 +213,7 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
         'numOfContainers': num_containers,
         'jvmArgs': jvm_args,
         'jmeterProperties': jmeter_properties,
-        'testDetails': {
-            'threadGroupName': thread_group_name,
-            'rampTime': ramp_time,
-            'scheduler': use_scheduler,
-            'estimatedDurationSeconds': parse_duration_to_seconds(duration) if duration else None
-        }
+        'testDetails': test_details
     }
     
     # Add dataFiles only if CSV files were found
