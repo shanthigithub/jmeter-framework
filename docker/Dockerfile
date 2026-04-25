@@ -35,7 +35,7 @@ RUN cd /opt/jmeter/lib/ext \
     && curl -L https://jmeter-plugins.org/get/ -o jmeter-plugins-manager.jar \
     # Download Command Runner JAR
     && curl -L https://repo1.maven.org/maven2/kg/apc/cmdrunner/2.3/cmdrunner-2.3.jar -o /opt/jmeter/lib/cmdrunner-2.3.jar \
-    # Install commonly used plugins directly from Maven
+    # Install kg.apc (jpgc) plugins from Maven
     && cd /opt/jmeter/lib/ext \
     && curl -L https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-casutg/2.10/jmeter-plugins-casutg-2.10.jar -o jmeter-plugins-casutg-2.10.jar \
     && curl -L https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-dummy/0.4/jmeter-plugins-dummy-0.4.jar -o jmeter-plugins-dummy-0.4.jar \
@@ -44,9 +44,15 @@ RUN cd /opt/jmeter/lib/ext \
     && curl -L https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-json/2.7/jmeter-plugins-json-2.7.jar -o jmeter-plugins-json-2.7.jar \
     && curl -L https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-perfmon/2.1/jmeter-plugins-perfmon-2.1.jar -o jmeter-plugins-perfmon-2.1.jar \
     && curl -L https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-cmn-jmeter/0.7/jmeter-plugins-cmn-jmeter-0.7.jar -o jmeter-plugins-cmn-jmeter-0.7.jar \
+    # Install BlazeMeter (bzm) plugins from Maven
+    && curl -L https://repo1.maven.org/maven2/com/blazemeter/jmeter-parallel/0.11/jmeter-parallel-0.11.jar -o jmeter-parallel-0.11.jar \
+    && curl -L https://repo1.maven.org/maven2/com/blazemeter/jmeter-plugins-random-csv-data-set/0.8/jmeter-plugins-random-csv-data-set-0.8.jar -o jmeter-plugins-random-csv-data-set-0.8.jar \
+    && curl -L https://repo1.maven.org/maven2/com/blazemeter/jmeter-plugins-weighted-switch-controller/0.6/jmeter-plugins-weighted-switch-controller-0.6.jar -o jmeter-plugins-weighted-switch-controller-0.6.jar \
+    && curl -L https://repo1.maven.org/maven2/com/blazemeter/jmeter-bzm-http2/1.5/jmeter-bzm-http2-1.5.jar -o jmeter-bzm-http2-1.5.jar \
     # Download dependencies for plugins
     && curl -L https://repo1.maven.org/maven2/kg/apc/perfmon/2.2.2/perfmon-2.2.2.jar -o perfmon-2.2.2.jar \
-    && curl -L https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar -o commons-pool2-2.11.1.jar
+    && curl -L https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar -o commons-pool2-2.11.1.jar \
+    && curl -L https://repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.12.0/commons-lang3-3.12.0.jar -o commons-lang3-3.12.0.jar
 
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
