@@ -504,4 +504,9 @@ export class JMeterEcsStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'TaskDefinitionArn', {
-    
+      value: taskDefinition.taskDefinitionArn,
+      description: 'ECS task definition ARN',
+      exportName: 'JMeterEcs-TaskDefinitionArn',
+    });
+  }
+}
