@@ -196,7 +196,7 @@ export class JMeterEcsStack extends cdk.Stack {
     });
 
     // Import Datadog secret from Secrets Manager (if configured)
-    // Secret should contain JSON: { "apiKey": "your-key", "site": "datadoghq.com" }
+    // Using your existing secret: datadog/personal-api-key
     let containerSecrets: { [key: string]: ecs.Secret } | undefined;
     
     if (config.datadog?.secretName) {
@@ -210,8 +210,8 @@ export class JMeterEcsStack extends cdk.Stack {
       datadogSecret.grantRead(taskExecutionRole);
       
       containerSecrets = {
-        DD_API_KEY: ecs.Secret.fromSecretsManager(datadogSecret, 'apiKey'),
-        DD_SITE: ecs.Secret.fromSecretsManager(datadogSecret, 'site'),
+        DD_API_KEY: ecs.Secret.fromSecretsManager(datadogSecret, config.datadog.apiKeyField || 'apiKey'),
+        DD_SITE: ecs.Secret.fromSecretsManager(datadogSecret, config.datadog.siteField || 'site'),
       };
     }
 

@@ -61,8 +61,9 @@ export const config = {
   // Datadog Integration (Optional)
   // Credentials stored in AWS Secrets Manager for security
   datadog: {
-    secretName: 'datadog/api-credentials',  // AWS Secrets Manager secret name
-    // Secret should contain: { "apiKey": "your-key", "site": "datadoghq.com" }
+    secretName: 'datadog/personal-api-key',  // Your existing secret name
+    apiKeyField: 'personal-dd-api-key',      // Your existing key field name
+    siteField: 'site',                       // Site field (you'll add this)
   },
 };
 
