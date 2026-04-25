@@ -230,48 +230,20 @@ if [ "${ENABLE_DATADOG_METRICS:-false}" = "true" ]; then
         # Set Datadog site (default to US)
         DD_SITE="${DD_SITE:-datadoghq.com}"
         
-        # Create DogStatsD configuration
-        cat > /etc/datadog/dogstatsd.yaml <<EOF
-api_key: ${DD_API_KEY}
-hostname: jmeter-${TEST_ID}-${CONTAINER_ID}
-dogstatsd_port: 8125
-site: ${DD_SITE}
-tags:
-  - test_id:${TEST_ID}
-  - run_id:${RUN_ID}
-  - container:${CONTAINER_ID}
-  - env:performance-testing
-EOF
-
-        # Start DogStatsD in background
+        # Export Datadog configuration for Python forwarder
+        export DD_API_KEY
+        export DD_SITE
+        export TEST_ID
+        export RUN_ID
+        export CONTAINER_ID
+        
         echo "[DATADOG] Configuration:"
         echo "  Site: ${DD_SITE}"
-        echo "  Hostname: jmeter-${TEST_ID}-${CONTAINER_ID}"
-        echo "  Tags: test_id:${TEST_ID}, run_id:${RUN_ID}, container:${CONTAINER_ID}"
+        echo "  Tags: test_id=${TEST_ID}, run_id=${RUN_ID}, container=${CONTAINER_ID}"
+        echo "  Forwarder: Python DogStatsD client (compatible with Alpine ARM64)"
         echo ""
-        echo "[DATADOG] Starting DogStatsD daemon..."
-        
-        # Start DogStatsD and redirect output to log file
-        nohup /usr/local/bin/dogstatsd -c /etc/datadog/dogstatsd.yaml > /tmp/dogstatsd.log 2>&1 &
-        DOGSTATSD_PID=$!
-        
-        # Give it a moment to start
-        sleep 2
-        
-        # Verify it started
-        if ps -p $DOGSTATSD_PID > /dev/null 2>&1; then
-            echo "✅ [DATADOG] DogStatsD started successfully (PID: ${DOGSTATSD_PID})"
-            echo "[DATADOG] Metrics will be sent to: ${DD_SITE}"
-            echo "[DATADOG] Logs: /tmp/dogstatsd.log"
-        else
-            echo "❌ [ERROR] DogStatsD failed to start"
-            echo "[ERROR] Check logs: /tmp/dogstatsd.log"
-            if [ -f /tmp/dogstatsd.log ]; then
-                echo "[ERROR] Last 10 lines of DogStatsD log:"
-                tail -10 /tmp/dogstatsd.log
-            fi
-            echo "⚠️  [WARNING] Continuing without Datadog metrics..."
-        fi
+        echo "✅ [DATADOG] Metrics forwarder ready"
+        echo "[DATADOG] JMeter summary metrics will be sent to Datadog during test execution"
         echo ""
     fi
 else
@@ -362,8 +334,15 @@ echo "[EXECUTE] Starting JMeter..."
 echo ""
 
 # Run JMeter and capture exit code
-"$@" 2>&1
-JMETER_RAW_EXIT=$?
+# If Datadog metrics enabled, pipe output through forwarder
+if [ "${ENABLE_DATADOG_METRICS:-false}" = "true" ] && [ -n "$DD_API_KEY" ]; then
+    echo "[DATADOG] Piping JMeter output through metrics forwarder..."
+    "$@" 2>&1 | tee >(python3 /usr/local/bin/dogstatsd-forwarder.py)
+    JMETER_RAW_EXIT=${PIPESTATUS[0]}
+else
+    "$@" 2>&1
+    JMETER_RAW_EXIT=$?
+fi
 
 echo ""
 

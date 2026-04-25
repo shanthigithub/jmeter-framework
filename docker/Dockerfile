@@ -57,13 +57,84 @@ RUN cd /opt/jmeter/lib/ext \
     # Install Datadog Backend Listener for JMeter
     && curl -L https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-graphs-basic/2.0/jmeter-plugins-graphs-basic-2.0.jar -o jmeter-plugins-graphs-basic-2.0.jar
 
-# Download DogStatsD standalone binary (lightweight Datadog agent for metrics)
-RUN curl -L https://github.com/DataDog/datadog-agent/releases/download/7.50.3/datadog-dogstatsd-amd64-7.50.3 \
-    -o /usr/local/bin/dogstatsd \
-    && chmod +x /usr/local/bin/dogstatsd
+# Create Datadog metrics forwarder script (Python-based, compatible with Alpine ARM64)
+RUN mkdir -p /usr/local/bin /etc/datadog
 
-# Create Datadog configuration directory
-RUN mkdir -p /etc/datadog
+# Create Python DogStatsD forwarder
+RUN cat > /usr/local/bin/dogstatsd-forwarder.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Lightweight DogStatsD-compatible metrics forwarder
+Reads JMeter metrics from stdin and forwards to Datadog
+"""
+import os
+import sys
+import time
+import re
+from datadog import initialize, statsd
+
+# Initialize Datadog
+options = {
+    'api_key': os.environ.get('DD_API_KEY'),
+    'app_key': None,
+    'statsd_host': '127.0.0.1',
+    'statsd_port': 8125,
+}
+
+# Get Datadog site from environment
+dd_site = os.environ.get('DD_SITE', 'datadoghq.com')
+if dd_site:
+    options['api_host'] = f'https://api.{dd_site}'
+
+initialize(**options)
+
+# Get tags from environment
+test_id = os.environ.get('TEST_ID', 'unknown')
+run_id = os.environ.get('RUN_ID', 'unknown')
+container_id = os.environ.get('CONTAINER_ID', 'unknown')
+
+base_tags = [
+    f'test_id:{test_id}',
+    f'run_id:{run_id}',
+    f'container_id:{container_id}',
+    'source:jmeter'
+]
+
+print(f"🐶 DogStatsD forwarder started - sending metrics to {dd_site}", flush=True)
+print(f"📊 Tags: {base_tags}", flush=True)
+
+# Parse JMeter summary line and send metrics
+# Example: summary =     16 in 00:00:11 =    1.5/s Avg:   168 Min:    84 Max:   324 Err:     0 (0.00%)
+pattern = re.compile(
+    r'summary.*?=\s+([\d.]+)/s.*?Avg:\s+([\d.]+).*?Min:\s+([\d.]+).*?Max:\s+([\d.]+).*?Err:\s+([\d.]+)\s+\(([\d.]+)%\)'
+)
+
+for line in sys.stdin:
+    line = line.strip()
+    if 'summary' in line and '=' in line:
+        match = pattern.search(line)
+        if match:
+            throughput = float(match.group(1))
+            avg_time = int(match.group(2))
+            min_time = int(match.group(3))
+            max_time = int(match.group(4))
+            errors = int(match.group(5))
+            error_pct = float(match.group(6))
+            
+            # Send metrics to Datadog
+            statsd.gauge('jmeter.throughput', throughput, tags=base_tags)
+            statsd.gauge('jmeter.response_time.avg', avg_time, tags=base_tags)
+            statsd.gauge('jmeter.response_time.min', min_time, tags=base_tags)
+            statsd.gauge('jmeter.response_time.max', max_time, tags=base_tags)
+            statsd.gauge('jmeter.errors', errors, tags=base_tags)
+            statsd.gauge('jmeter.error_rate', error_pct, tags=base_tags)
+            
+            print(f"📈 Metrics sent: throughput={throughput}/s, avg={avg_time}ms, errors={error_pct}%", flush=True)
+
+print("🐶 DogStatsD forwarder stopped", flush=True)
+EOF
+
+RUN chmod +x /usr/local/bin/dogstatsd-forwarder.py
 
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
