@@ -54,6 +54,11 @@ def lambda_handler(event, context):
         if not isinstance(test_suite, list):
             raise ValueError("'testSuite' must be a list")
         
+        # Check if Datadog metrics should be enabled (from workflow input)
+        enable_datadog_from_workflow = event.get('enableDatadogMetrics', '').lower() == 'yes'
+        if enable_datadog_from_workflow:
+            print("🐶 Datadog metrics enabled via workflow input")
+        
         # Validate and enrich each test
         for idx, test in enumerate(test_suite):
             # Only testScript is required
@@ -72,6 +77,14 @@ def lambda_handler(event, context):
             # Default execute to true if not provided
             if 'execute' not in test:
                 test['execute'] = True
+            
+            # Override Datadog setting if workflow input says yes
+            # Workflow input takes precedence over config file
+            if enable_datadog_from_workflow:
+                test['enableDatadog'] = True
+                if 'datadogSite' not in test:
+                    test['datadogSite'] = 'datadoghq.com'  # Default site
+                print(f"  ✅ Datadog enabled for test: {test['testId']}")
             
             # Note: numOfContainers, threads, duration will be auto-extracted by JMX Parser
             # They are optional in the config and will be added later in the pipeline
