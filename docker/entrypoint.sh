@@ -333,20 +333,98 @@ else
 fi
 echo ""
 
-# Execute JMeter command
-echo "[EXECUTE] Starting JMeter..."
-if [ -n "$DATADOG_JMETER_ARGS" ]; then
-    echo "[DATADOG] Adding Datadog properties to JMeter command"
-    echo "[DATADOG] Properties: $DATADOG_JMETER_ARGS"
+# Start Datadog forwarder in background (if enabled)
+FORWARDER_PID=""
+if [ "${ENABLE_DATADOG_METRICS:-false}" = "true" ]; then
+    echo ""
+    echo "=========================================="
+    echo "[DATADOG] Starting Metrics Forwarder"
+    echo "=========================================="
+    
+    # Validate DD_API_KEY is provided
+    if [ -z "$DD_API_KEY" ]; then
+        echo "⚠️  [WARNING] ENABLE_DATADOG_METRICS=true but DD_API_KEY not set"
+        echo "⚠️  [WARNING] Datadog metrics will NOT be sent"
+        echo "⚠️  [HINT] Set DD_API_KEY in ECS task definition secrets"
+    else
+        # Set Datadog site (default from secrets manager or fallback)
+        DD_SITE="${DD_SITE:-datadoghq.com}"
+        
+        # Build tags
+        DD_TAGS="test_id:${TEST_ID},run_id:${RUN_ID},container_id:${CONTAINER_ID}"
+        
+        # Results file path
+        RESULTS_JTL="/tmp/results-0.jtl"
+        
+        echo "[DATADOG] Configuration:"
+        echo "  API Site: ${DD_SITE}"
+        echo "  Tags: ${DD_TAGS}"
+        echo "  JTL File: ${RESULTS_JTL}"
+        
+        # Start forwarder in background
+        python3 /usr/local/bin/datadog-forwarder.py \
+            --jtl-file "${RESULTS_JTL}" \
+            --dd-api-key "${DD_API_KEY}" \
+            --dd-site "${DD_SITE}" \
+            --tags "${DD_TAGS}" \
+            &
+        
+        FORWARDER_PID=$!
+        echo "✅ [DATADOG] Forwarder started (PID: ${FORWARDER_PID})"
+        echo "[DATADOG] Metrics will be sent in real-time as test runs"
+    fi
+    echo ""
+else
+    echo "[DATADOG] Metrics disabled (ENABLE_DATADOG_METRICS=${ENABLE_DATADOG_METRICS:-false})"
+    echo ""
 fi
+
+# Execute JMeter command
+echo "=========================================="
+echo "[RUN] Running JMeter Test"
+echo "=========================================="
+echo "[COMMAND] $@"
 echo ""
 
-# Run JMeter with Datadog properties if enabled
-# The Backend Listener in the JMX file will read these properties
-"$@" $DATADOG_JMETER_ARGS 2>&1
+"$@" 2>&1
 JMETER_RAW_EXIT=$?
 
 echo ""
+
+# Wait for Datadog forwarder to finish sending buffered metrics
+if [ -n "$FORWARDER_PID" ]; then
+    echo "=========================================="
+    echo "[DATADOG] Waiting for forwarder to complete"
+    echo "=========================================="
+    echo "[DATADOG] Giving forwarder 15 seconds to send final metrics..."
+    
+    # Give forwarder time to send final batch
+    sleep 15
+    
+    # Check if forwarder is still running
+    if kill -0 $FORWARDER_PID 2>/dev/null; then
+        echo "[DATADOG] Stopping forwarder (PID: ${FORWARDER_PID})..."
+        kill -TERM $FORWARDER_PID 2>/dev/null || true
+        
+        # Wait up to 5 seconds for graceful shutdown
+        for i in {1..5}; do
+            if ! kill -0 $FORWARDER_PID 2>/dev/null; then
+                echo "✅ [DATADOG] Forwarder stopped gracefully"
+                break
+            fi
+            sleep 1
+        done
+        
+        # Force kill if still running
+        if kill -0 $FORWARDER_PID 2>/dev/null; then
+            echo "[DATADOG] Force stopping forwarder..."
+            kill -KILL $FORWARDER_PID 2>/dev/null || true
+        fi
+    else
+        echo "✅ [DATADOG] Forwarder already completed"
+    fi
+    echo ""
+fi
 
 # Determine actual success by checking if results file was created
 # JMeter may return non-zero for warnings, but if results exist, test ran

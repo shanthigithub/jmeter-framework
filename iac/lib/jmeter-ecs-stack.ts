@@ -8,6 +8,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { config } from '../environments/config';
 import * as path from 'path';
@@ -126,13 +127,26 @@ export class JMeterEcsStack extends cdk.Stack {
       resources: [`${resultsBucket.bucketArn}/*`],
     }));
 
-    // Task Execution Role - pulls ECR images, writes CloudWatch logs
+    // Task Execution Role - pulls ECR images, writes CloudWatch logs, reads secrets
     const taskExecutionRole = new iam.Role(this, 'TaskExecutionRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
       ],
     });
+
+    // Import Datadog secret (if configured)
+    let datadogSecret: secretsmanager.ISecret | undefined;
+    if (config.monitoring.datadogSecretArn) {
+      datadogSecret = secretsmanager.Secret.fromSecretCompleteArn(
+        this,
+        'DatadogSecret',
+        config.monitoring.datadogSecretArn
+      );
+      
+      // Grant task execution role permission to read Datadog secret
+      datadogSecret.grantRead(taskExecutionRole);
+    }
 
     // Lambda Execution Role
     const lambdaRole = new iam.Role(this, 'LambdaRole', {
@@ -194,6 +208,12 @@ export class JMeterEcsStack extends cdk.Stack {
       executionRole: taskExecutionRole,
     });
 
+    // Build container secrets configuration
+    const containerSecrets: { [key: string]: ecs.Secret } = {};
+    if (datadogSecret) {
+      containerSecrets['DD_API_KEY'] = ecs.Secret.fromSecretsManager(datadogSecret);
+    }
+
     // Add container to task definition
     const container = taskDefinition.addContainer('jmeter', {
       image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
@@ -206,6 +226,7 @@ export class JMeterEcsStack extends cdk.Stack {
         RESULTS_BUCKET: config.resultsBucket,
         AWS_REGION: this.region,
       },
+      secrets: Object.keys(containerSecrets).length > 0 ? containerSecrets : undefined,
       // Command will be overridden by Lambda when running tasks
       command: ['echo', 'JMeter container - command will be set by Lambda'],
     });

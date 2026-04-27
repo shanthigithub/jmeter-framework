@@ -119,6 +119,14 @@ def lambda_handler(event, context):
                     {'name': 'TEST_SCRIPT_S3', 'value': f's3://{config_bucket}/{test_script}'},
                 ]
                 
+                # Add Datadog configuration if enabled in test config
+                if test.get('enableDatadog', False):
+                    environment.append({'name': 'ENABLE_DATADOG_METRICS', 'value': 'true'})
+                    # DD_SITE defaults to datadoghq.com in test config or can be overridden
+                    dd_site = test.get('datadogSite', 'datadoghq.com')
+                    environment.append({'name': 'DD_SITE', 'value': dd_site})
+                    print(f"    📊 Datadog metrics enabled for container {container_idx} (site: {dd_site})")
+                
                 # Add data file S3 path if partitioned
                 if data_partitions and container_idx < len(data_partitions):
                     data_partition = data_partitions[container_idx]

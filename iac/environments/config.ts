@@ -61,7 +61,9 @@ export const config = {
   // Monitoring
   monitoring: {
     enableDatadog: false,    // Optional: Enable Datadog integration
-    datadogSite: 'us5.datadoghq.com',
+    datadogSite: 'datadoghq.com',
+    // Datadog API key from AWS Secrets Manager
+    datadogSecretArn: 'arn:aws:secretsmanager:us-east-1:623035187488:secret:datadog/personal-api-key-rt1vuN',
   },
 };
 
