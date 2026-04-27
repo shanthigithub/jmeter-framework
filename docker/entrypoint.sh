@@ -212,6 +212,49 @@ fi
 echo "✅ [SUCCESS] All required downloads complete"
 echo ""
 
+# ═══════════════════════════════════════════════════════════════════════════
+# DATADOG METRICS (Optional)
+# ═══════════════════════════════════════════════════════════════════════════
+DATADOG_JMETER_ARGS=""
+
+if [ "${ENABLE_DATADOG_METRICS:-false}" = "true" ]; then
+    echo "=========================================="
+    echo "[DATADOG] Configuring Datadog Integration"
+    echo "=========================================="
+    
+    # Validate DD_API_KEY is provided
+    if [ -z "$DD_API_KEY" ]; then
+        echo "⚠️  [WARNING] ENABLE_DATADOG_METRICS=true but DD_API_KEY not set"
+        echo "⚠️  [WARNING] Datadog metrics will NOT be sent"
+        echo "⚠️  [HINT] Set DD_API_KEY in ECS task definition environment variables"
+        echo ""
+    else
+        # Set Datadog site (default to US5 for personal accounts)
+        DD_SITE="${DD_SITE:-us5.datadoghq.com}"
+        
+        # Build custom tags for Datadog
+        DD_CUSTOM_TAGS="test_id:${TEST_ID},run_id:${RUN_ID},container_id:${CONTAINER_ID},source:jmeter"
+        
+        # Add JMeter properties for Backend Listener to use
+        # These properties are read by the Datadog Backend Listener in the JMX file
+        DATADOG_JMETER_ARGS="-JDD_API_KEY=${DD_API_KEY} -JDD_CUSTOM_TAGS=${DD_CUSTOM_TAGS}"
+        
+        echo "[DATADOG] Configuration:"
+        echo "  API Site: ${DD_SITE}"
+        echo "  Custom Tags: ${DD_CUSTOM_TAGS}"
+        echo "  Integration: JMeter Backend Listener"
+        echo "  JMeter Args: ${DATADOG_JMETER_ARGS}"
+        echo ""
+        echo "✅ [DATADOG] Backend Listener configured"
+        echo "[DATADOG] Add 'Datadog Backend Listener' to your JMX file to enable metrics"
+        echo "[DATADOG] See: DATADOG_BACKEND_LISTENER_CONFIG.md for configuration details"
+        echo ""
+    fi
+else
+    echo "[DATADOG] Metrics disabled (ENABLE_DATADOG_METRICS=${ENABLE_DATADOG_METRICS:-false})"
+    echo ""
+fi
+
 # Container Synchronization (optional)
 # If ENABLE_SYNC=true, wait for START signal from coordinator before running test
 if [ "${ENABLE_SYNC:-false}" = "true" ]; then
@@ -292,10 +335,15 @@ echo ""
 
 # Execute JMeter command
 echo "[EXECUTE] Starting JMeter..."
+if [ -n "$DATADOG_JMETER_ARGS" ]; then
+    echo "[DATADOG] Adding Datadog properties to JMeter command"
+    echo "[DATADOG] Properties: $DATADOG_JMETER_ARGS"
+fi
 echo ""
 
-# Run JMeter and capture exit code
-"$@" 2>&1
+# Run JMeter with Datadog properties if enabled
+# The Backend Listener in the JMX file will read these properties
+"$@" $DATADOG_JMETER_ARGS 2>&1
 JMETER_RAW_EXIT=$?
 
 echo ""
