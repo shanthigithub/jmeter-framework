@@ -21,10 +21,41 @@ env:
   ECR_REPOSITORY: jmeter-framework
 
 jobs:
+  # Check what files changed to skip unnecessary builds
+  check-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+      lambda: ${{ steps.filter.outputs.lambda }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check file changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docker:
+              - 'docker/**'
+            lambda:
+              - 'iac/lambda/**'
+            infra:
+              - 'iac/lib/**'
+              - 'iac/bin/**'
+              - 'iac/package*.json'
+
   build-and-push-image:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.inputs.build_image == 'true'
+    needs: check-changes
+    # Build if: manual trigger OR docker files changed OR workflow_dispatch with build_image=true
+    if: |
+      github.event.inputs.build_image == 'true' ||
+      needs.check-changes.outputs.docker == 'true' ||
+      (github.event_name == 'push' && needs.check-changes.outputs.docker == 'true')
     
     permissions:
       id-token: write  # Required for OIDC
@@ -33,6 +64,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -44,20 +78,45 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       
-      - name: Build, tag, and push image to ECR
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('docker/Dockerfile', 'docker/**') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        with:
+          context: ./docker
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            JMETER_VERSION=5.6.3
+      
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      
+      - name: Build summary
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          cd docker
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          
-          echo "✅ Image pushed:"
+          echo "✅ Image pushed with layer caching:"
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          echo ""
+          echo "💡 Next build will reuse cached layers for faster deployment"
 
   deploy-infrastructure:
     name: Deploy Infrastructure
