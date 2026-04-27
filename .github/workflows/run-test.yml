@@ -107,7 +107,7 @@ jobs:
           EXECUTION_NAME="test-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_NUMBER}"
           
           # Build input JSON with Datadog flag
-          INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\", \"enableDatadogMetrics\": \"$ENABLE_DATADOG\"}"
+          INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\", \"enable_datadog_metrics\": \"$ENABLE_DATADOG\"}"
           
           echo "🚀 Starting execution: $EXECUTION_NAME"
           echo "📋 Config: ${{ github.event.inputs.test_config }}"
