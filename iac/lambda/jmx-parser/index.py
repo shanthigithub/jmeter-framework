@@ -180,7 +180,9 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     thread_group_name = f"{len(thread_groups)} Thread Groups" if len(thread_groups) > 1 else thread_groups[0].get('testname', 'Thread Group')
     
     # Calculate optimal number of containers
+    print(f"💡 Total threads across {len(thread_groups)} thread group(s): {num_threads}")
     num_containers = calculate_containers(num_threads)
+    print(f"📦 Calculated containers: {num_containers} (based on {num_threads} total threads)")
     
     # Calculate JVM args based on threads
     jvm_args = calculate_jvm_args(num_threads)
