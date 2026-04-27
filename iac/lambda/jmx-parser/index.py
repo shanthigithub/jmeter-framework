@@ -199,6 +199,8 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     # Build testDetails dynamically based on test type
     test_details = {
         'threadGroupName': thread_group_name,
+        'totalThreads': num_threads,
+        'threadGroups': thread_group_details,  # List of all thread groups with their details
         'rampTime': ramp_time,
         'scheduler': use_scheduler,
     }

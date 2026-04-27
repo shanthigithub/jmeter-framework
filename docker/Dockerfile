@@ -60,13 +60,15 @@ RUN cd /opt/jmeter/lib/ext \
 # Create Datadog metrics forwarder script (Python-based, compatible with Alpine ARM64)
 RUN mkdir -p /usr/local/bin /etc/datadog
 
-# Create Python DogStatsD forwarder
-RUN cat > /usr/local/bin/dogstatsd-forwarder.py <<'DOGSTATSD_SCRIPT'
+# Create Python real-time metrics processor (parses JTL for percentiles)
+RUN cat > /usr/local/bin/datadog-realtime-metrics.py <<'METRICS_SCRIPT'
 #!/usr/bin/env python3
 import os
 import sys
-import re
+import csv
 import time
+import threading
+from collections import deque
 from datadog import initialize, api
 
 # Initialize Datadog
@@ -78,7 +80,7 @@ initialize(
     api_host=f'https://api.{dd_site}'
 )
 
-# Get tags from environment
+# Get tags
 test_id = os.environ.get('TEST_ID', 'unknown')
 run_id = os.environ.get('RUN_ID', 'unknown')
 container_id = os.environ.get('CONTAINER_ID', 'unknown')
@@ -90,51 +92,142 @@ base_tags = [
     'source:jmeter'
 ]
 
-print(f"🐶 DogStatsD forwarder started - sending metrics to {dd_site}", flush=True)
-print(f"📊 Tags: {base_tags}", flush=True)
+print(f"📊 Real-time metrics processor started - sending to {dd_site}", flush=True)
+print(f"🏷️  Tags: {base_tags}", flush=True)
 
-# Parse JMeter summary line and send metrics
-# Example: summary =     16 in 00:00:11 =    1.5/s Avg:   168 Min:    84 Max:   324 Err:     0 (0.00%)
-pattern = re.compile(
-    r'summary.*?=\s+([\d.]+)/s.*?Avg:\s+([\d.]+).*?Min:\s+([\d.]+).*?Max:\s+([\d.]+).*?Err:\s+([\d.]+)\s+\(([\d.]+)%\)'
-)
+# Sliding window for metrics (last 60 seconds)
+WINDOW_SIZE = 60  # seconds
+response_times = deque()
+errors_count = deque()
+active_threads = set()
+last_send = time.time()
+SEND_INTERVAL = 10  # Send metrics every 10 seconds
 
-for line in sys.stdin:
-    line = line.strip()
-    if 'summary' in line and '=' in line:
-        match = pattern.search(line)
-        if match:
-            throughput = float(match.group(1))
-            avg_time = int(match.group(2))
-            min_time = int(match.group(3))
-            max_time = int(match.group(4))
-            errors = int(match.group(5))
-            error_pct = float(match.group(6))
-            
-            # Send metrics to Datadog via HTTP API
-            now = int(time.time())
-            
-            metrics = [
-                {'metric': 'jmeter.throughput', 'points': [(now, throughput)], 'tags': base_tags},
-                {'metric': 'jmeter.response_time.avg', 'points': [(now, avg_time)], 'tags': base_tags},
-                {'metric': 'jmeter.response_time.min', 'points': [(now, min_time)], 'tags': base_tags},
-                {'metric': 'jmeter.response_time.max', 'points': [(now, max_time)], 'tags': base_tags},
-                {'metric': 'jmeter.errors', 'points': [(now, errors)], 'tags': base_tags},
-                {'metric': 'jmeter.error_rate', 'points': [(now, error_pct)], 'tags': base_tags},
-            ]
-            
+def calculate_percentile(values, percentile):
+    if not values:
+        return 0
+    sorted_values = sorted(values)
+    index = int(len(sorted_values) * percentile / 100)
+    return sorted_values[min(index, len(sorted_values) - 1)]
+
+def send_metrics():
+    global response_times, errors_count, last_send
+    
+    now = int(time.time())
+    current_time = time.time()
+    
+    # Clean old data (older than WINDOW_SIZE seconds)
+    cutoff = current_time - WINDOW_SIZE
+    response_times = deque([r for r in response_times if r['time'] > cutoff])
+    errors_count = deque([e for e in errors_count if e['time'] > cutoff])
+    
+    if not response_times:
+        return
+    
+    # Extract response time values
+    rt_values = [r['elapsed'] for r in response_times]
+    error_values = [e['success'] for e in errors_count]
+    
+    # Calculate metrics
+    avg = sum(rt_values) / len(rt_values)
+    p90 = calculate_percentile(rt_values, 90)
+    p95 = calculate_percentile(rt_values, 95)
+    p99 = calculate_percentile(rt_values, 99)
+    
+    error_count = sum(1 for e in error_values if not e)
+    error_rate = (error_count / len(error_values) * 100) if error_values else 0
+    
+    throughput = len(rt_values) / WINDOW_SIZE
+    active_users = len(active_threads)
+    
+    # Send to Datadog
+    metrics = [
+        {'metric': 'jmeter.response_time.avg', 'points': [(now, avg)], 'tags': base_tags},
+        {'metric': 'jmeter.response_time.p90', 'points': [(now, p90)], 'tags': base_tags},
+        {'metric': 'jmeter.response_time.p95', 'points': [(now, p95)], 'tags': base_tags},
+        {'metric': 'jmeter.response_time.p99', 'points': [(now, p99)], 'tags': base_tags},
+        {'metric': 'jmeter.throughput', 'points': [(now, throughput)], 'tags': base_tags},
+        {'metric': 'jmeter.error_rate', 'points': [(now, error_rate)], 'tags': base_tags},
+        {'metric': 'jmeter.active_users', 'points': [(now, active_users)], 'tags': base_tags},
+    ]
+    
+    try:
+        api.Metric.send(metrics)
+        print(f"📈 Metrics: avg={avg:.0f}ms, p90={p90:.0f}ms, p95={p95:.0f}ms, p99={p99:.0f}ms, "
+              f"throughput={throughput:.2f}/s, errors={error_rate:.2f}%, active_users={active_users}", flush=True)
+    except Exception as e:
+        print(f"❌ Error sending metrics: {e}", flush=True)
+    
+    last_send = current_time
+
+# Get JTL file path from command line
+if len(sys.argv) < 2:
+    print("Usage: datadog-realtime-metrics.py <jtl_file>", flush=True)
+    sys.exit(1)
+
+jtl_file = sys.argv[1]
+
+# Wait for JTL file to be created
+while not os.path.exists(jtl_file):
+    time.sleep(1)
+
+print(f"📄 Monitoring JTL file: {jtl_file}", flush=True)
+
+# Tail the JTL file
+with open(jtl_file, 'r') as f:
+    # Skip header
+    header = f.readline()
+    
+    while True:
+        line = f.readline()
+        
+        if line:
             try:
-                api.Metric.send(metrics)
+                # Parse JTL CSV line
+                # Format: timeStamp,elapsed,label,responseCode,responseMessage,threadName,dataType,success,failureMessage,bytes,sentBytes,grpThreads,allThreads,URL,Latency,IdleTime,Connect
+                parts = line.strip().split(',')
+                
+                if len(parts) >= 13:
+                    timestamp = int(parts[0])
+                    elapsed = int(parts[1])
+                    thread_name = parts[5]
+                    success = parts[7].lower() == 'true'
+                    all_threads = int(parts[12])
+                    
+                    current_time = time.time()
+                    
+                    # Add to sliding window
+                    response_times.append({
+                        'time': current_time,
+                        'elapsed': elapsed
+                    })
+                    
+                    errors_count.append({
+                        'time': current_time,
+                        'success': success
+                    })
+                    
+                    # Track active threads
+                    active_threads.add(thread_name)
+                    
+                    # Send metrics every SEND_INTERVAL seconds
+                    if current_time - last_send >= SEND_INTERVAL:
+                        send_metrics()
+                        
             except Exception as e:
-                print(f"❌ Error sending metrics: {e}", flush=True)
-                continue
+                print(f"⚠️  Error parsing line: {e}", flush=True)
+        else:
+            # No new line, wait a bit
+            time.sleep(0.1)
             
-            print(f"📈 Metrics sent: throughput={throughput}/s, avg={avg_time}ms, errors={error_pct}%", flush=True)
+            # Still send metrics if interval elapsed
+            if time.time() - last_send >= SEND_INTERVAL:
+                send_metrics()
 
-print("🐶 DogStatsD forwarder stopped", flush=True)
-DOGSTATSD_SCRIPT
+print("📊 Metrics processor stopped", flush=True)
+METRICS_SCRIPT
 
-RUN chmod +x /usr/local/bin/dogstatsd-forwarder.py
+RUN chmod +x /usr/local/bin/datadog-realtime-metrics.py
 
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
