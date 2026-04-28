@@ -369,6 +369,8 @@ export class JMeterEcsStack extends cdk.Stack {
           'testScript.$': '$.testScript',
           'testId.$': '$.testId',
           'execute.$': '$.execute',
+          'enableDatadog.$': '$.enableDatadog',
+          'datadogSite.$': '$.datadogSite',
           'configBucket': config.configBucket,
         }),
         resultSelector: {
