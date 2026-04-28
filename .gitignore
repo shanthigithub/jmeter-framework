@@ -52,3 +52,7 @@ github-actions-permissions.json
 *.MD
 README*
 CHANGELOG*
+
+# Exclude copied review directories
+cp_jmeter-dev/
+k6-framework-personal/
