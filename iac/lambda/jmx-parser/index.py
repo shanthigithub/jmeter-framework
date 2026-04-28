@@ -127,45 +127,71 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     for i, thread_group in enumerate(thread_groups, 1):
         tg_name = thread_group.get('testname', f'Thread Group {i}')
         
-        # Extract thread count (resolve variables)
-        tg_threads = get_element_value(thread_group, 'stringProp', 'ThreadGroup.num_threads', default='1')
-        tg_threads = resolve_variable(tg_threads, user_variables)
-        tg_threads = int(tg_threads)
+        # Extract thread count (resolve variables) - search only within this thread group
+        tg_threads_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.num_threads', default='1')
+        tg_threads_str = resolve_variable(tg_threads_str, user_variables)
+        try:
+            tg_threads = int(tg_threads_str)
+        except ValueError:
+            print(f"  ⚠️  Invalid thread count '{tg_threads_str}', defaulting to 1")
+            tg_threads = 1
         total_threads += tg_threads
         
         # Extract ramp-up time (resolve variables)
-        tg_ramp = get_element_value(thread_group, 'stringProp', 'ThreadGroup.ramp_time', default='1')
-        tg_ramp = resolve_variable(tg_ramp, user_variables)
-        tg_ramp = int(tg_ramp)
+        tg_ramp_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.ramp_time', default='1')
+        tg_ramp_str = resolve_variable(tg_ramp_str, user_variables)
+        try:
+            tg_ramp = int(tg_ramp_str)
+        except ValueError:
+            print(f"  ⚠️  Invalid ramp time '{tg_ramp_str}', defaulting to 1")
+            tg_ramp = 1
         max_ramp_time = max(max_ramp_time, tg_ramp)
         
         # Check scheduler
-        tg_scheduler = get_element_value(thread_group, 'boolProp', 'ThreadGroup.scheduler', default='false')
+        tg_scheduler = get_element_value_local(thread_group, 'boolProp', 'ThreadGroup.scheduler', default='false')
         tg_use_scheduler = tg_scheduler.lower() == 'true'
         
+        tg_duration_formatted = None
         if tg_use_scheduler:
             use_scheduler = True
-            tg_duration = get_element_value(thread_group, 'stringProp', 'ThreadGroup.duration', default='300')
-            # Resolve duration variable if present (e.g., ${testDuration})
-            tg_duration = resolve_variable(tg_duration, user_variables)
-            max_duration_seconds = max(max_duration_seconds, int(tg_duration))
+            tg_duration_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.duration', default='300')
+            # Resolve duration variable if present (e.g., ${TestDuration})
+            tg_duration_str = resolve_variable(tg_duration_str, user_variables)
+            try:
+                tg_duration_seconds = int(tg_duration_str)
+                tg_duration_formatted = format_duration(tg_duration_seconds)
+                max_duration_seconds = max(max_duration_seconds, tg_duration_seconds)
+            except ValueError:
+                print(f"  ⚠️  Invalid duration '{tg_duration_str}', defaulting to 300s")
+                tg_duration_formatted = "5m"
+                max_duration_seconds = max(max_duration_seconds, 300)
         else:
             # Iteration-based
             loop_count = get_element_value(thread_group, 'elementProp/stringProp', 'LoopController.loops', default='1')
             continue_forever = get_element_value(thread_group, 'elementProp/boolProp', 'LoopController.continue_forever', default='false')
             
             if continue_forever.lower() != 'true' and loop_count != '-1':
-                tg_iterations = int(loop_count)
-                max_iterations = max(max_iterations, tg_iterations)
+                try:
+                    tg_iterations = int(loop_count)
+                    max_iterations = max(max_iterations, tg_iterations)
+                except ValueError:
+                    pass
         
-        thread_group_details.append({
+        # Build thread group detail with duration if scheduler is enabled
+        tg_detail = {
             'name': tg_name,
             'threads': tg_threads,
             'rampTime': tg_ramp,
             'scheduler': tg_use_scheduler
-        })
+        }
         
-        print(f"  └─ {tg_name}: {tg_threads} threads, ramp {tg_ramp}s")
+        if tg_duration_formatted:
+            tg_detail['duration'] = tg_duration_formatted
+        
+        thread_group_details.append(tg_detail)
+        
+        duration_info = f", duration {tg_duration_formatted}" if tg_duration_formatted else ""
+        print(f"  └─ {tg_name}: {tg_threads} threads, ramp {tg_ramp}s{duration_info}")
     
     # Determine final duration/iterations
     duration = None
@@ -211,6 +237,7 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     
     # Build testDetails dynamically based on test type
     test_details = {
+        'TotalThreadGroups': len(thread_groups),
         'threadGroupName': thread_group_name,
         'totalThreads': num_threads,
         'threadGroups': thread_group_details,  # List of all thread groups with their details
@@ -298,6 +325,17 @@ def get_element_value(parent: ET.Element, element_type: str, name: str, default:
         if elem.get('name') == name:
             return elem.text or default
     
+    return default
+
+
+def get_element_value_local(parent: ET.Element, element_type: str, name: str, default: str = '') -> str:
+    """
+    Get value from JMX element by name attribute (searches only direct children).
+    This ensures we don't pick up values from nested thread groups.
+    """
+    for elem in parent.findall(f"./{element_type}"):
+        if elem.get('name') == name:
+            return elem.text or default
     return default
 
 
