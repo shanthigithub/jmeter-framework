@@ -1,0 +1,20 @@
+# Cline AI Assistant Rules for this Project
+
+## File Creation Restrictions
+
+### NEVER Create Markdown Files
+- Do NOT create any .md files (README.md, documentation files, guides, etc.)
+- Do NOT create any markdown documentation
+- Do NOT create CHANGELOG files
+- Do NOT create any files with .MD extension (case-insensitive)
+
+### Reason
+This project deliberately avoids markdown documentation files. All documentation should be provided in other formats or stored externally.
+
+### Exception
+Only create markdown files if the user explicitly requests it with clear confirmation.
+
+## Communication Guidelines
+- When completing tasks, provide results directly without creating summary .md files
+- Use inline responses instead of documentation files
+- If documentation is needed, ask the user where they want it stored (external wiki, comments in code, etc.)

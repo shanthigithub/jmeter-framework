@@ -101,7 +101,14 @@ jobs:
           echo "::group::Starting Step Functions execution"
           STATE_MACHINE="${{ steps.get-outputs.outputs.state_machine }}"
           CONFIG_KEY="config/${{ github.event.inputs.test_config }}"
-          ENABLE_DATADOG="${{ github.event.inputs.enable_datadog_metrics }}"
+          ENABLE_DATADOG_INPUT="${{ github.event.inputs.enable_datadog_metrics }}"
+          
+          # Convert yes/no to true/false for container environment
+          if [ "$ENABLE_DATADOG_INPUT" = "yes" ]; then
+            ENABLE_DATADOG="true"
+          else
+            ENABLE_DATADOG="false"
+          fi
           
           # Create execution name with timestamp
           EXECUTION_NAME="test-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_NUMBER}"
