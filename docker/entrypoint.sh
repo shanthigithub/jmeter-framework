@@ -330,10 +330,15 @@ echo ""
 
 # Start Datadog forwarder in background (if enabled)
 FORWARDER_PID=""
+
+echo "🔍 [DEBUG-ENTRYPOINT] Checking Datadog environment variable..."
+echo "🔍 [DEBUG-ENTRYPOINT] ENABLE_DATADOG_METRICS='${ENABLE_DATADOG_METRICS:-NOT_SET}'"
+echo "🔍 [DEBUG-ENTRYPOINT] Expected value: 'true' (lowercase)"
+
 if [ "${ENABLE_DATADOG_METRICS:-false}" = "true" ]; then
     echo ""
     echo "=========================================="
-    echo "[DATADOG] Starting Metrics Forwarder"
+    echo "[DATADOG] ✅ Metrics ENABLED - Starting Forwarder"
     echo "=========================================="
     
     # Validate DD_API_KEY is provided
@@ -370,7 +375,9 @@ if [ "${ENABLE_DATADOG_METRICS:-false}" = "true" ]; then
     fi
     echo ""
 else
-    echo "[DATADOG] Metrics disabled (ENABLE_DATADOG_METRICS=${ENABLE_DATADOG_METRICS:-false})"
+    echo "[DATADOG] ⚠️  Metrics DISABLED"
+    echo "🔍 [DEBUG-ENTRYPOINT] ENABLE_DATADOG_METRICS was set to: '${ENABLE_DATADOG_METRICS:-NOT_SET}'"
+    echo "🔍 [DEBUG-ENTRYPOINT] This does NOT match 'true' (case-sensitive comparison)"
     echo ""
 fi
 

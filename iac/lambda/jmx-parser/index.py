@@ -50,6 +50,10 @@ def lambda_handler(event, context):
     """
     
     try:
+        print("🔍 [DEBUG-JMXPARSER] Received event data...")
+        print(f"🔍 [DEBUG-JMXPARSER] enableDatadog in event: {event.get('enableDatadog', 'NOT_PRESENT')}")
+        print(f"🔍 [DEBUG-JMXPARSER] Full event keys: {list(event.keys())}")
+        
         test_script = event.get('testScript')
         test_id = event.get('testId')
         execute = event.get('execute', True)
@@ -74,6 +78,15 @@ def lambda_handler(event, context):
             'execute': execute,
             **config  # Spread the parsed config (threads, duration, etc.)
         }
+        
+        # Pass through enableDatadog flag if present (set by ReadConfig Lambda)
+        if 'enableDatadog' in event:
+            result['enableDatadog'] = event['enableDatadog']
+            print(f"🔍 [DEBUG-JMXPARSER] Passing through enableDatadog={event['enableDatadog']}")
+        
+        if 'datadogSite' in event:
+            result['datadogSite'] = event['datadogSite']
+            print(f"🔍 [DEBUG-JMXPARSER] Passing through datadogSite={event['datadogSite']}")
         
         print(f"✅ Parsed configuration: {json.dumps(result, indent=2)}")
         

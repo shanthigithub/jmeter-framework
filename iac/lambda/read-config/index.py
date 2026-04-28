@@ -56,9 +56,19 @@ def lambda_handler(event, context):
         
         # Check if Datadog metrics should be enabled (from workflow input)
         # Workflow sends 'enable_datadog_metrics' (snake_case) with value 'true' or 'false'
-        enable_datadog_from_workflow = event.get('enable_datadog_metrics', '').lower() == 'true'
+        print("🔍 [DEBUG-READCONFIG] Checking Datadog flag from workflow input...")
+        print(f"🔍 [DEBUG-READCONFIG] Raw event data: {json.dumps(event)}")
+        
+        enable_datadog_input = event.get('enable_datadog_metrics', '')
+        print(f"🔍 [DEBUG-READCONFIG] enable_datadog_metrics from event: '{enable_datadog_input}' (type: {type(enable_datadog_input).__name__})")
+        
+        enable_datadog_from_workflow = enable_datadog_input.lower() == 'true'
+        print(f"🔍 [DEBUG-READCONFIG] After comparison with 'true': {enable_datadog_from_workflow}")
+        
         if enable_datadog_from_workflow:
-            print("🐶 Datadog metrics enabled via workflow input (enable_datadog_metrics=true)")
+            print("🐶 [DEBUG-READCONFIG] Datadog metrics ENABLED via workflow input")
+        else:
+            print(f"⚠️  [DEBUG-READCONFIG] Datadog metrics DISABLED (input was: '{enable_datadog_input}')")
         
         # Validate and enrich each test
         for idx, test in enumerate(test_suite):

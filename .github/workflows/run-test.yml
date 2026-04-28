@@ -110,11 +110,20 @@ jobs:
             ENABLE_DATADOG="false"
           fi
           
+          echo "🔍 [DEBUG] Datadog Parameter Conversion:"
+          echo "  Input from user: '$ENABLE_DATADOG_INPUT'"
+          echo "  Converted value: '$ENABLE_DATADOG'"
+          echo ""
+          
           # Create execution name with timestamp
           EXECUTION_NAME="test-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_NUMBER}"
           
           # Build input JSON with Datadog flag
           INPUT_JSON="{\"configKey\": \"$CONFIG_KEY\", \"enable_datadog_metrics\": \"$ENABLE_DATADOG\"}"
+          
+          echo "🔍 [DEBUG] Step Functions Input JSON:"
+          echo "$INPUT_JSON" | jq '.'
+          echo ""
           
           echo "🚀 Starting execution: $EXECUTION_NAME"
           echo "📋 Config: ${{ github.event.inputs.test_config }}"
