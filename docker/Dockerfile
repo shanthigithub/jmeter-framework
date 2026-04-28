@@ -97,6 +97,7 @@ RUN cd ${JMETER_HOME}/lib \
     && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.25.0/selenium-json-4.25.0.jar -o selenium-json-4.25.0.jar \
     && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-manager/4.25.0/selenium-manager-4.25.0.jar -o selenium-manager-4.25.0.jar \
     && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v127/4.25.0/selenium-devtools-v127-4.25.0.jar -o selenium-devtools-v127-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-os/4.25.0/selenium-os-4.25.0.jar -o selenium-os-4.25.0.jar \
     # Google dependencies (required by Selenium)
     && curl -fSL --retry 3 https://repo1.maven.org/maven2/com/google/guava/guava/33.3.1-jre/guava-33.3.1-jre.jar -o guava-33.3.1-jre.jar \
     && curl -fSL --retry 3 https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar -o auto-service-annotations-1.1.1.jar \
