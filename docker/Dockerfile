@@ -61,6 +61,9 @@ RUN cd /opt/jmeter/lib/ext \
 COPY datadog-forwarder.py /usr/local/bin/datadog-forwarder.py
 RUN chmod +x /usr/local/bin/datadog-forwarder.py
 
+# Copy Log4j2 configuration (fixes "package scanning deprecated" warning)
+COPY log4j2.xml /opt/jmeter/bin/log4j2.xml
+
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
 

@@ -36,7 +36,12 @@ __pycache__/
 # Local test results
 results/
 *.jtl
-*.xml
+# Ignore JMeter result XML files, but keep configuration files
+*.jmx.xml
+results*.xml
+summary*.xml
+# Allow Log4j2 config
+!docker/log4j2.xml
 
 # Git ignore for uploaded files
 github-actions-trust-policy.json
