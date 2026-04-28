@@ -79,6 +79,11 @@ def lambda_handler(event, context):
             **config  # Spread the parsed config (threads, duration, etc.)
         }
         
+        # Pass through testType if present (CRITICAL for browser vs API task selection)
+        if 'testType' in event:
+            result['testType'] = event['testType']
+            print(f"🔍 [DEBUG-JMXPARSER] Passing through testType={event['testType']}")
+        
         # Pass through enableDatadog flag if present (set by ReadConfig Lambda)
         if 'enableDatadog' in event:
             result['enableDatadog'] = event['enableDatadog']
