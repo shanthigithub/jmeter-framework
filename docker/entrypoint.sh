@@ -420,14 +420,16 @@ echo "[UPLOAD] Uploading Results to S3"
 echo "=========================================="
 echo ""
 
-# Upload all result files from /tmp
+# Upload all result files from /tmp to container-specific folder
+# Structure: results/{run_id}/container-{container_id}/filename.jtl
 uploaded_count=0
 failed_count=0
 
 for file in /tmp/*.jtl /tmp/*.log /tmp/*.csv; do
     if [ -f "$file" ]; then
         filename=$(basename "$file")
-        s3_key="${RESULTS_PREFIX}/${filename}"
+        # Upload to container-specific folder
+        s3_key="${RESULTS_PREFIX}/container-${CONTAINER_ID}/${filename}"
         
         if upload_results "$file" "$s3_key"; then
             ((uploaded_count++))

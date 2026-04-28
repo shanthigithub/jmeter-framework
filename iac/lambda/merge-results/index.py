@@ -52,11 +52,12 @@ def lambda_handler(event, context):
             
             print(f"  🔄 Test {test_id}: Merging results from {len(job_ids)} containers")
             
-            # List all result files for this test
+            # List all result files for this test from container-specific folders
+            # Structure: {runId}/{testId}/container-{X}/results.jtl
             results_prefix = f"{run_id}/{test_id}/"
             
             try:
-                # List all .jtl files
+                # List all .jtl files from all container folders
                 response = s3.list_objects_v2(
                     Bucket=results_bucket,
                     Prefix=results_prefix
@@ -66,9 +67,10 @@ def lambda_handler(event, context):
                     print(f"    ⚠️  No result files found at s3://{results_bucket}/{results_prefix}")
                     continue
                 
+                # Find .jtl files only from container-X folders (not from combined/)
                 jtl_files = [
                     obj['Key'] for obj in response['Contents'] 
-                    if obj['Key'].endswith('.jtl')
+                    if obj['Key'].endswith('.jtl') and '/container-' in obj['Key']
                 ]
                 
                 if not jtl_files:
@@ -111,9 +113,10 @@ def lambda_handler(event, context):
                     print(f"    ⚠️  No samples found in result files")
                     continue
                 
-                # Upload merged results
+                # Upload merged results to combined/ folder
+                # Structure: {runId}/{testId}/combined/merged-results.jtl
                 merged_content = '\n'.join(merged_lines)
-                merged_key = f"{results_prefix}merged-results.jtl"
+                merged_key = f"{results_prefix}combined/merged-results.jtl"
                 
                 s3.put_object(
                     Bucket=results_bucket,
@@ -132,8 +135,8 @@ def lambda_handler(event, context):
                 summary['containers'] = len(job_ids)
                 summary['timestamp'] = datetime.utcnow().isoformat()
                 
-                # Upload summary
-                summary_key = f"{results_prefix}summary.json"
+                # Upload summary to combined/ folder
+                summary_key = f"{results_prefix}combined/summary.json"
                 s3.put_object(
                     Bucket=results_bucket,
                     Key=summary_key,
