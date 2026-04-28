@@ -276,6 +276,28 @@ fi
 # Set JVM options
 export JVM_ARGS
 
+# Start Xvfb (X Virtual Framebuffer) for headless browser support
+echo "=========================================="
+echo "[BROWSER] Starting virtual display (Xvfb)"
+echo "=========================================="
+# Start Xvfb on display :99 in background
+Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp -nolisten unix &
+XVFB_PID=$!
+echo "[BROWSER] Xvfb started (PID: ${XVFB_PID}, DISPLAY: :99)"
+echo "[BROWSER] Virtual screen: 1920x1080x24"
+
+# Wait for Xvfb to be ready
+sleep 2
+
+# Verify Xvfb is running
+if kill -0 $XVFB_PID 2>/dev/null; then
+    echo "✅ [BROWSER] Virtual display ready for headless browser execution"
+else
+    echo "⚠️  [WARNING] Xvfb may have failed to start"
+    echo "⚠️  [WARNING] Browser tests may not work properly"
+fi
+echo ""
+
 # Run JMeter
 echo "=========================================="
 # Verify JMeter binary exists
@@ -494,6 +516,11 @@ echo "[CLEANUP] Terminating any remaining background processes..."
 pkill -9 java 2>/dev/null || true
 # Kill any other JMeter-related processes
 pkill -9 jmeter 2>/dev/null || true
+# Kill Xvfb
+if [ -n "$XVFB_PID" ] && kill -0 $XVFB_PID 2>/dev/null; then
+    echo "[CLEANUP] Stopping Xvfb (PID: ${XVFB_PID})..."
+    kill $XVFB_PID 2>/dev/null || true
+fi
 echo "✅ [CLEANUP] Cleanup complete"
 echo ""
 

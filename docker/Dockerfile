@@ -6,13 +6,30 @@ FROM alpine:3.19
 # JMeter version
 ARG JMETER_VERSION=5.6.3
 
-# Install dependencies including Datadog agent
+# Install dependencies including Datadog agent and browser support
 RUN apk add --no-cache \
     openjdk17-jre \
     curl \
     bash \
     python3 \
     py3-pip \
+    # Browser and WebDriver support
+    chromium \
+    chromium-chromedriver \
+    # X11 virtual framebuffer for headless browser execution
+    xvfb \
+    xvfb-run \
+    # Fonts and rendering dependencies
+    ttf-freefont \
+    font-noto-emoji \
+    # Graphics libraries required by Chromium
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    # Additional utilities
+    dbus \
+    udev \
     && pip3 install --break-system-packages --no-cache-dir awscli \
     && pip3 install --break-system-packages --no-cache-dir datadog
 
@@ -29,6 +46,12 @@ RUN mkdir /opt/jmeter \
 # Add JMeter to PATH
 ENV PATH="/opt/jmeter/bin:${PATH}"
 ENV JMETER_HOME="/opt/jmeter"
+
+# Browser environment variables for headless execution
+ENV CHROME_BIN=/usr/bin/chromium-browser \
+    CHROME_PATH=/usr/lib/chromium/ \
+    CHROMIUM_FLAGS="--disable-software-rasterizer --disable-dev-shm-usage --no-sandbox --disable-gpu" \
+    DISPLAY=:99
 
 # Install JMeter Plugins Manager and common plugins
 # Using -f to fail on HTTP errors, --retry for robustness
@@ -58,6 +81,22 @@ RUN cd /opt/jmeter/lib/ext \
     # Install additional useful plugins
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-graphs-basic/2.0/jmeter-plugins-graphs-basic-2.0.jar -o jmeter-plugins-graphs-basic-2.0.jar \
     && echo "All JARs downloaded successfully with retry logic!"
+
+# Install Selenium WebDriver for JMeter browser testing
+# Using Selenium 4.28.0 (latest stable compatible with Chromium)
+RUN cd /tmp \
+    && curl -fSL --retry 3 --retry-delay 2 \
+        https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.28.0/selenium-java-4.28.0.zip \
+        -o selenium-java.zip \
+    && unzip -q selenium-java.zip \
+    && mv selenium-*.jar ${JMETER_HOME}/lib/ \
+    && mv lib/*.jar ${JMETER_HOME}/lib/ \
+    && rm -rf /tmp/selenium-java.zip /tmp/lib \
+    && echo "✅ Selenium WebDriver installed for browser automation"
+
+# Verify browser installation
+RUN chromium-browser --version && chromedriver --version \
+    && echo "✅ Chromium and ChromeDriver installed successfully"
 
 # Copy Datadog forwarder script
 COPY datadog-forwarder.py /usr/local/bin/datadog-forwarder.py
