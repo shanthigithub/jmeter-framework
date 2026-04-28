@@ -359,11 +359,12 @@ echo ""
 echo "=========================================="
 echo "[RUN] Running JMeter Test (with timeout protection)"
 echo "=========================================="
-echo "[COMMAND] timeout -t ${TASK_TIMEOUT} $@"
+echo "[COMMAND] timeout ${TASK_TIMEOUT} $@"
 echo ""
 
-# BusyBox timeout syntax: timeout -t SECONDS COMMAND
-timeout -t ${TASK_TIMEOUT} "$@" 2>&1
+# BusyBox timeout syntax: timeout SECONDS COMMAND (no -t flag needed)
+# Exit codes: 0 = success, 124 = timeout, others = JMeter error
+timeout ${TASK_TIMEOUT} "$@" 2>&1
 JMETER_RAW_EXIT=$?
 
 echo ""
@@ -485,6 +486,20 @@ echo "Container ID: ${CONTAINER_ID}"
 echo "JMeter Exit Code: ${JMETER_EXIT_CODE}"
 echo "Files Uploaded: ${uploaded_count}"
 echo "=========================================="
+echo ""
 
+# Force cleanup of any remaining processes
+echo "[CLEANUP] Terminating any remaining background processes..."
+# Kill all java processes (JMeter) except this script
+pkill -9 java 2>/dev/null || true
+# Kill any other JMeter-related processes
+pkill -9 jmeter 2>/dev/null || true
+echo "✅ [CLEANUP] Cleanup complete"
+echo ""
+
+# Give a brief moment for cleanup
+sleep 2
+
+echo "[EXIT] Container will now terminate"
 # Exit with JMeter's exit code
 exit $JMETER_EXIT_CODE

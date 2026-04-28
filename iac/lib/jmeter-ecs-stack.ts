@@ -239,6 +239,7 @@ export class JMeterEcsStack extends cdk.Stack {
       },
       secrets: Object.keys(containerSecrets).length > 0 ? containerSecrets : undefined,
       command: ['echo', 'JMeter API container - command will be set by Lambda'],
+      stopTimeout: cdk.Duration.seconds(120), // Force stop after 2 minutes if container doesn't exit
     });
 
     // Browser Task Definition (4 vCPU / 8 GB) - For Selenium/JSR223 browser tests
@@ -271,6 +272,7 @@ export class JMeterEcsStack extends cdk.Stack {
       },
       secrets: Object.keys(containerSecrets).length > 0 ? containerSecrets : undefined,
       command: ['echo', 'JMeter Browser container - command will be set by Lambda'],
+      stopTimeout: cdk.Duration.seconds(120), // Force stop after 2 minutes if container doesn't exit
     });
 
     // ═══════════════════════════════════════════════════════════════════════
