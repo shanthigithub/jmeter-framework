@@ -342,14 +342,27 @@ else
     echo ""
 fi
 
-# Execute JMeter command
+# Calculate timeout: estimated duration + 30 minute buffer
+ESTIMATED_DURATION=${ESTIMATED_DURATION_SECONDS:-3600}  # Default 1 hour if not set
+TIMEOUT_BUFFER=$((30 * 60))  # 30 minutes in seconds
+TASK_TIMEOUT=$((ESTIMATED_DURATION + TIMEOUT_BUFFER))
+
 echo "=========================================="
-echo "[RUN] Running JMeter Test"
+echo "[TIMEOUT] Protection Settings"
 echo "=========================================="
-echo "[COMMAND] $@"
+echo "Estimated Test Duration: ${ESTIMATED_DURATION}s ($(($ESTIMATED_DURATION / 60))m)"
+echo "Timeout Buffer: ${TIMEOUT_BUFFER}s ($(($TIMEOUT_BUFFER / 60))m)"
+echo "Maximum Task Runtime: ${TASK_TIMEOUT}s ($(($TASK_TIMEOUT / 60))m)"
 echo ""
 
-"$@" 2>&1
+# Execute JMeter command with timeout protection
+echo "=========================================="
+echo "[RUN] Running JMeter Test (with timeout protection)"
+echo "=========================================="
+echo "[COMMAND] timeout ${TASK_TIMEOUT}s $@"
+echo ""
+
+timeout --preserve-status ${TASK_TIMEOUT} "$@" 2>&1
 JMETER_RAW_EXIT=$?
 
 echo ""
@@ -389,12 +402,30 @@ if [ -n "$FORWARDER_PID" ]; then
     echo ""
 fi
 
+# Check if timeout occurred (exit code 124 = timeout)
+if [ $JMETER_RAW_EXIT -eq 124 ]; then
+    echo "⚠️  [TIMEOUT] Test exceeded maximum runtime (${TASK_TIMEOUT}s = $(($TASK_TIMEOUT / 60))m)"
+    echo "⚠️  [TIMEOUT] Estimated duration was ${ESTIMATED_DURATION}s, but test ran longer"
+    echo "⚠️  [TIMEOUT] This may indicate:"
+    echo "   - Test is hung or has an infinite loop"
+    echo "   - Estimated duration was too short"
+    echo "   - Server responses are slower than expected"
+    echo ""
+    echo "ℹ️  [INFO] Partial results will still be uploaded if available"
+fi
+
 # Determine actual success by checking if results file was created
 # JMeter may return non-zero for warnings, but if results exist, test ran
 RESULTS_FILE="/tmp/results-0.jtl"
 if [ -f "$RESULTS_FILE" ] && [ -s "$RESULTS_FILE" ]; then
     # Results file exists and is not empty
-    echo "✅ [SUCCESS] JMeter test completed - results file created"
+    if [ $JMETER_RAW_EXIT -eq 124 ]; then
+        echo "⚠️  [TIMEOUT] JMeter was stopped due to timeout, but partial results exist"
+        JMETER_EXIT_CODE=124  # Report timeout
+    else
+        echo "✅ [SUCCESS] JMeter test completed - results file created"
+        JMETER_EXIT_CODE=0
+    fi
     
     # Check for errors in results (optional - for stricter validation)
     # If you want to fail on test errors, uncomment this:
@@ -402,8 +433,6 @@ if [ -f "$RESULTS_FILE" ] && [ -s "$RESULTS_FILE" ]; then
     # if [ "$error_count" -gt 0 ]; then
     #     echo "⚠️  [WARNING] Test completed but had ${error_count} failed requests"
     # fi
-    
-    JMETER_EXIT_CODE=0
 elif [ $JMETER_RAW_EXIT -eq 0 ]; then
     echo "✅ [SUCCESS] JMeter completed with exit code 0"
     JMETER_EXIT_CODE=0

@@ -65,8 +65,8 @@ def lambda_handler(event, context):
             
             num_containers = test['numOfContainers']
             threads = test['testDetails'].get('totalThreads', 0)
-            # Duration is now in threadGroups, get from first group or use estimatedDurationSeconds
-            duration = test['testDetails'].get('estimatedDurationSeconds', 300)
+            # Get estimated duration for timeout protection
+            estimated_duration = test['testDetails'].get('estimatedDurationSeconds', 3600)
             data_partitions = test.get('dataPartitions', [])
             jvm_args = test.get('jvmArgs', '-Xms512m -Xmx2g')
             jmeter_props = test.get('jmeterProperties', {})
@@ -115,6 +115,8 @@ def lambda_handler(event, context):
                     {'name': 'ENABLE_SYNC', 'value': enable_sync},
                     # S3 paths for test files (downloaded by entrypoint)
                     {'name': 'TEST_SCRIPT_S3', 'value': f's3://{config_bucket}/{test_script}'},
+                    # Timeout protection - estimated duration for timeout calculation
+                    {'name': 'ESTIMATED_DURATION_SECONDS', 'value': str(estimated_duration)},
                 ]
                 
                 # Add Datadog configuration if enabled in test config
