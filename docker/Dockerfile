@@ -83,30 +83,55 @@ RUN cd /opt/jmeter/lib/ext \
     && echo "All JARs downloaded successfully with retry logic!"
 
 # Install Selenium WebDriver for JMeter browser testing
-# Using individual JARs from Maven Central (more reliable than GitHub zip)
+# Complete installation with ALL required dependencies for Selenium 4.25.0
 RUN cd ${JMETER_HOME}/lib \
-    && echo "Downloading Selenium WebDriver components..." \
-    # Core Selenium Java bindings
-    && curl -fSL --retry 3 --retry-delay 2 \
-        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.25.0/selenium-java-4.25.0.jar \
-        -o selenium-java-4.25.0.jar \
-    # Selenium Chrome driver
-    && curl -fSL --retry 3 --retry-delay 2 \
-        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.25.0/selenium-chrome-driver-4.25.0.jar \
-        -o selenium-chrome-driver-4.25.0.jar \
-    # Selenium API
-    && curl -fSL --retry 3 --retry-delay 2 \
-        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.25.0/selenium-api-4.25.0.jar \
-        -o selenium-api-4.25.0.jar \
-    # Selenium Remote driver
-    && curl -fSL --retry 3 --retry-delay 2 \
-        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-remote-driver/4.25.0/selenium-remote-driver-4.25.0.jar \
-        -o selenium-remote-driver-4.25.0.jar \
-    # Selenium Support utilities
-    && curl -fSL --retry 3 --retry-delay 2 \
-        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.25.0/selenium-support-4.25.0.jar \
-        -o selenium-support-4.25.0.jar \
-    && echo "✅ Selenium WebDriver installed for browser automation"
+    && echo "Downloading Selenium WebDriver with all dependencies..." \
+    # Core Selenium components
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.25.0/selenium-java-4.25.0.jar -o selenium-java-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.25.0/selenium-api-4.25.0.jar -o selenium-api-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.25.0/selenium-chrome-driver-4.25.0.jar -o selenium-chrome-driver-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chromium-driver/4.25.0/selenium-chromium-driver-4.25.0.jar -o selenium-chromium-driver-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-remote-driver/4.25.0/selenium-remote-driver-4.25.0.jar -o selenium-remote-driver-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.25.0/selenium-support-4.25.0.jar -o selenium-support-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-http/4.25.0/selenium-http-4.25.0.jar -o selenium-http-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.25.0/selenium-json-4.25.0.jar -o selenium-json-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-manager/4.25.0/selenium-manager-4.25.0.jar -o selenium-manager-4.25.0.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v127/4.25.0/selenium-devtools-v127-4.25.0.jar -o selenium-devtools-v127-4.25.0.jar \
+    # Google dependencies (required by Selenium)
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/com/google/guava/guava/33.3.1-jre/guava-33.3.1-jre.jar -o guava-33.3.1-jre.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar -o auto-service-annotations-1.1.1.jar \
+    # Netty dependencies (for async HTTP)
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/netty/netty-buffer/4.1.115.Final/netty-buffer-4.1.115.Final.jar -o netty-buffer-4.1.115.Final.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/netty/netty-codec-http/4.1.115.Final/netty-codec-http-4.1.115.Final.jar -o netty-codec-http-4.1.115.Final.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/netty/netty-codec/4.1.115.Final/netty-codec-4.1.115.Final.jar -o netty-codec-4.1.115.Final.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/netty/netty-common/4.1.115.Final/netty-common-4.1.115.Final.jar -o netty-common-4.1.115.Final.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/netty/netty-handler/4.1.115.Final/netty-handler-4.1.115.Final.jar -o netty-handler-4.1.115.Final.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/netty/netty-transport/4.1.115.Final/netty-transport-4.1.115.Final.jar -o netty-transport-4.1.115.Final.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/netty/netty-transport-native-unix-common/4.1.115.Final/netty-transport-native-unix-common-4.1.115.Final.jar -o netty-transport-native-unix-common-4.1.115.Final.jar \
+    # Async HTTP client
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar -o async-http-client-2.12.3.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client-netty-utils/2.12.3/async-http-client-netty-utils-2.12.3.jar -o async-http-client-netty-utils-2.12.3.jar \
+    # Apache HTTP components
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.4/httpclient5-5.4.jar -o httpclient5-5.4.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.3/httpcore5-5.3.jar -o httpcore5-5.3.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.3/httpcore5-h2-5.3.jar -o httpcore5-h2-5.3.jar \
+    # Byte Buddy (for proxying)
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.15.10/byte-buddy-1.15.10.jar -o byte-buddy-1.15.10.jar \
+    # OpenTelemetry (for tracing)
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-api/1.44.1/opentelemetry-api-1.44.1.jar -o opentelemetry-api-1.44.1.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-context/1.44.1/opentelemetry-context-1.44.1.jar -o opentelemetry-context-1.44.1.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-exporter-logging/1.44.1/opentelemetry-exporter-logging-1.44.1.jar -o opentelemetry-exporter-logging-1.44.1.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-sdk/1.44.1/opentelemetry-sdk-1.44.1.jar -o opentelemetry-sdk-1.44.1.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-sdk-common/1.44.1/opentelemetry-sdk-common-1.44.1.jar -o opentelemetry-sdk-common-1.44.1.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-sdk-trace/1.44.1/opentelemetry-sdk-trace-1.44.1.jar -o opentelemetry-sdk-trace-1.44.1.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-sdk-logs/1.44.1/opentelemetry-sdk-logs-1.44.1.jar -o opentelemetry-sdk-logs-1.44.1.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-sdk-extension-autoconfigure/1.44.1/opentelemetry-sdk-extension-autoconfigure-1.44.1.jar -o opentelemetry-sdk-extension-autoconfigure-1.44.1.jar \
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-sdk-extension-autoconfigure-spi/1.44.1/opentelemetry-sdk-extension-autoconfigure-spi-1.44.1.jar -o opentelemetry-sdk-extension-autoconfigure-spi-1.44.1.jar \
+    # Failsafe (for retrying)
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar -o failsafe-3.3.2.jar \
+    # Reactive Streams
+    && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/reactivestreams/reactive-streams/1.0.4/reactive-streams-1.0.4.jar -o reactive-streams-1.0.4.jar \
+    && echo "✅ Selenium WebDriver with all dependencies installed (40+ JARs)"
 
 # Verify browser installation
 RUN chromium-browser --version && chromedriver --version \
