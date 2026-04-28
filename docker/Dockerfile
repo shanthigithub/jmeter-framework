@@ -83,15 +83,29 @@ RUN cd /opt/jmeter/lib/ext \
     && echo "All JARs downloaded successfully with retry logic!"
 
 # Install Selenium WebDriver for JMeter browser testing
-# Using Selenium 4.28.0 (latest stable compatible with Chromium)
-RUN cd /tmp \
+# Using individual JARs from Maven Central (more reliable than GitHub zip)
+RUN cd ${JMETER_HOME}/lib \
+    && echo "Downloading Selenium WebDriver components..." \
+    # Core Selenium Java bindings
     && curl -fSL --retry 3 --retry-delay 2 \
-        https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.28.0/selenium-java-4.28.0.zip \
-        -o selenium-java.zip \
-    && unzip -q selenium-java.zip \
-    && mv selenium-*.jar ${JMETER_HOME}/lib/ \
-    && mv lib/*.jar ${JMETER_HOME}/lib/ \
-    && rm -rf /tmp/selenium-java.zip /tmp/lib \
+        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.25.0/selenium-java-4.25.0.jar \
+        -o selenium-java-4.25.0.jar \
+    # Selenium Chrome driver
+    && curl -fSL --retry 3 --retry-delay 2 \
+        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.25.0/selenium-chrome-driver-4.25.0.jar \
+        -o selenium-chrome-driver-4.25.0.jar \
+    # Selenium API
+    && curl -fSL --retry 3 --retry-delay 2 \
+        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.25.0/selenium-api-4.25.0.jar \
+        -o selenium-api-4.25.0.jar \
+    # Selenium Remote driver
+    && curl -fSL --retry 3 --retry-delay 2 \
+        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-remote-driver/4.25.0/selenium-remote-driver-4.25.0.jar \
+        -o selenium-remote-driver-4.25.0.jar \
+    # Selenium Support utilities
+    && curl -fSL --retry 3 --retry-delay 2 \
+        https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.25.0/selenium-support-4.25.0.jar \
+        -o selenium-support-4.25.0.jar \
     && echo "✅ Selenium WebDriver installed for browser automation"
 
 # Verify browser installation
