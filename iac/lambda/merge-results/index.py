@@ -35,22 +35,26 @@ def lambda_handler(event, context):
     """
     try:
         results_bucket = os.environ['RESULTS_BUCKET']
-        jobs_config = event.get('jobs', [])
+        
+        # Accept both 'jobs' (old) and 'tasks' (new from submit-tasks Lambda)
+        tasks_config = event.get('tasks', event.get('jobs', []))
         run_id = event.get('runId', 'unknown')
         
-        print(f"📊 Merging results for {len(jobs_config)} tests, runId: {run_id}")
+        print(f"📊 Merging results for {len(tasks_config)} tests, runId: {run_id}")
         
         merged_results = []
         
-        for job_group in jobs_config:
-            test_id = job_group['testId']
-            job_ids = job_group.get('jobIds', [])
+        for task_group in tasks_config:
+            test_id = task_group['testId']
             
-            if not job_ids:
-                print(f"  ⚠️  Test {test_id}: No job IDs to merge")
+            # Accept both 'jobIds' (old) and 'taskArns' (new)
+            num_containers = task_group.get('numContainers', task_group.get('expectedContainers', 0))
+            
+            if num_containers == 0:
+                print(f"  ⚠️  Test {test_id}: No containers to merge")
                 continue
             
-            print(f"  🔄 Test {test_id}: Merging results from {len(job_ids)} containers")
+            print(f"  🔄 Test {test_id}: Merging results from {num_containers} containers")
             
             # List all result files for this test from container-specific folders
             # Structure: {runId}/{testId}/container-{X}/results.jtl
@@ -132,7 +136,7 @@ def lambda_handler(event, context):
                 summary['testId'] = test_id
                 summary['runId'] = run_id
                 summary['totalSamples'] = total_samples
-                summary['containers'] = len(job_ids)
+                summary['containers'] = num_containers
                 summary['timestamp'] = datetime.utcnow().isoformat()
                 
                 # Upload summary to combined/ folder
@@ -151,7 +155,7 @@ def lambda_handler(event, context):
                     'resultsKey': merged_key,
                     'summaryKey': summary_key,
                     'totalSamples': total_samples,
-                    'containers': len(job_ids),
+                    'containers': num_containers,
                 })
             
             except ClientError as e:
