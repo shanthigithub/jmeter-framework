@@ -47,7 +47,7 @@ RUN cd /opt/jmeter/lib/ext \
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-perfmon/2.1/jmeter-plugins-perfmon-2.1.jar -o jmeter-plugins-perfmon-2.1.jar \
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-cmn-jmeter/0.7/jmeter-plugins-cmn-jmeter-0.7.jar -o jmeter-plugins-cmn-jmeter-0.7.jar \
     # Install BlazeMeter (bzm) plugins from Maven
-    && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-parallel/0.11/jmeter-parallel-0.11.jar -o jmeter-parallel-0.11.jar \
+    && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-parallel/0.12/jmeter-parallel-0.12.jar -o jmeter-parallel-0.12.jar \
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-plugins-random-csv-data-set/0.8/jmeter-plugins-random-csv-data-set-0.8.jar -o jmeter-plugins-random-csv-data-set-0.8.jar \
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-plugins-wsc/0.7/jmeter-plugins-wsc-0.7.jar -o jmeter-plugins-wsc-0.7.jar \
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-bzm-http2/1.4/jmeter-bzm-http2-1.4.jar -o jmeter-bzm-http2-1.4.jar \
