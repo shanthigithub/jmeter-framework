@@ -35,7 +35,8 @@ def lambda_handler(event, context):
     """
     try:
         cluster = os.environ['ECS_CLUSTER']
-        task_definition = os.environ['TASK_DEFINITION']
+        task_def_api = os.environ['TASK_DEF_ARN_API']
+        task_def_browser = os.environ['TASK_DEF_ARN_BROWSER']
         config_bucket = os.environ['CONFIG_BUCKET']
         results_bucket = os.environ['RESULTS_BUCKET']
         subnets = os.environ['SUBNETS'].split(',')
@@ -71,7 +72,12 @@ def lambda_handler(event, context):
             jvm_args = test.get('jvmArgs', '-Xms512m -Xmx2g')
             jmeter_props = test.get('jmeterProperties', {})
             
-            print(f"  📊 Test {test_id}: Launching {num_containers} tasks")
+            # Select task definition based on test type (k6-framework style)
+            test_type = test.get('testType', 'api')  # Default to 'api' if not specified
+            task_definition = task_def_browser if test_type == 'browser' else task_def_api
+            
+            print(f"  📊 Test {test_id}: type={test_type}, tasks={num_containers}")
+            print(f"     Using task definition: {task_definition.split('/')[-1]}")
             
             task_arns = []
             

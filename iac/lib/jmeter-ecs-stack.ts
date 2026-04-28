@@ -199,36 +199,78 @@ export class JMeterEcsStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Fargate Task Definition
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
-      family: 'jmeter-task',
-      cpu: config.ecs.task.vcpus * 1024,  // 1 vCPU = 1024 units
-      memoryLimitMiB: config.ecs.task.memoryMiB,
-      taskRole: taskRole,
-      executionRole: taskExecutionRole,
-    });
-
-    // Build container secrets configuration
+    // ═══════════════════════════════════════════════════════════════════════
+    // TASK DEFINITIONS (API & BROWSER)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // Build container secrets configuration (shared by both task definitions)
     const containerSecrets: { [key: string]: ecs.Secret } = {};
     if (datadogSecret) {
       containerSecrets['DD_API_KEY'] = ecs.Secret.fromSecretsManager(datadogSecret);
     }
 
-    // Add container to task definition
-    const container = taskDefinition.addContainer('jmeter', {
+    // API Task Definition (2 vCPU / 4 GB) - For HTTP/REST API tests
+    const apiTaskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDefinition', {
+      family: 'jmeter-api',
+      cpu: config.ecs.apiTask.vcpus * 1024,  // 1 vCPU = 1024 units
+      memoryLimitMiB: config.ecs.apiTask.memoryMiB,
+      taskRole: taskRole,
+      executionRole: taskExecutionRole,
+    });
+
+    // Create separate log group for API tasks
+    const apiLogGroup = new logs.LogGroup(this, 'ApiLogGroup', {
+      logGroupName: '/jmeter/api',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    apiTaskDefinition.addContainer('jmeter', {
       image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
       logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'jmeter',
-        logGroup: jmeterLogGroup,
+        streamPrefix: 'jmeter-api',
+        logGroup: apiLogGroup,
       }),
       environment: {
         CONFIG_BUCKET: config.configBucket,
         RESULTS_BUCKET: config.resultsBucket,
         AWS_REGION: this.region,
+        TEST_TYPE: 'api',
       },
       secrets: Object.keys(containerSecrets).length > 0 ? containerSecrets : undefined,
-      // Command will be overridden by Lambda when running tasks
-      command: ['echo', 'JMeter container - command will be set by Lambda'],
+      command: ['echo', 'JMeter API container - command will be set by Lambda'],
+    });
+
+    // Browser Task Definition (4 vCPU / 8 GB) - For Selenium/JSR223 browser tests
+    const browserTaskDefinition = new ecs.FargateTaskDefinition(this, 'BrowserTaskDefinition', {
+      family: 'jmeter-browser',
+      cpu: config.ecs.browserTask.vcpus * 1024,
+      memoryLimitMiB: config.ecs.browserTask.memoryMiB,
+      taskRole: taskRole,
+      executionRole: taskExecutionRole,
+    });
+
+    // Create separate log group for browser tasks
+    const browserLogGroup = new logs.LogGroup(this, 'BrowserLogGroup', {
+      logGroupName: '/jmeter/browser',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    browserTaskDefinition.addContainer('jmeter', {
+      image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'jmeter-browser',
+        logGroup: browserLogGroup,
+      }),
+      environment: {
+        CONFIG_BUCKET: config.configBucket,
+        RESULTS_BUCKET: config.resultsBucket,
+        AWS_REGION: this.region,
+        TEST_TYPE: 'browser',
+      },
+      secrets: Object.keys(containerSecrets).length > 0 ? containerSecrets : undefined,
+      command: ['echo', 'JMeter Browser container - command will be set by Lambda'],
     });
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -277,7 +319,8 @@ export class JMeterEcsStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(config.lambda.timeoutSeconds.submitTasks),
       environment: {
         ECS_CLUSTER: cluster.clusterName,
-        TASK_DEFINITION: taskDefinition.taskDefinitionArn,
+        TASK_DEF_ARN_API: apiTaskDefinition.taskDefinitionArn,
+        TASK_DEF_ARN_BROWSER: browserTaskDefinition.taskDefinitionArn,
         CONFIG_BUCKET: config.configBucket,
         RESULTS_BUCKET: config.resultsBucket,
         SUBNETS: vpc.publicSubnets.map(s => s.subnetId).join(','),
@@ -526,10 +569,16 @@ export class JMeterEcsStack extends cdk.Stack {
       exportName: 'JMeterEcs-ClusterName',
     });
 
-    new cdk.CfnOutput(this, 'TaskDefinitionArn', {
-      value: taskDefinition.taskDefinitionArn,
-      description: 'ECS task definition ARN',
-      exportName: 'JMeterEcs-TaskDefinitionArn',
+    new cdk.CfnOutput(this, 'ApiTaskDefinitionArn', {
+      value: apiTaskDefinition.taskDefinitionArn,
+      description: 'ECS API task definition ARN (2 vCPU / 4 GB)',
+      exportName: 'JMeterEcs-ApiTaskDefinitionArn',
+    });
+
+    new cdk.CfnOutput(this, 'BrowserTaskDefinitionArn', {
+      value: browserTaskDefinition.taskDefinitionArn,
+      description: 'ECS Browser task definition ARN (4 vCPU / 8 GB)',
+      exportName: 'JMeterEcs-BrowserTaskDefinitionArn',
     });
   }
 }

@@ -18,12 +18,19 @@ export const config = {
   
   // ECS Fargate Configuration
   ecs: {
-    // Task Configuration
-    task: {
+    // API Task Configuration (Lightweight - HTTP/REST)
+    apiTask: {
       vcpus: 2,               // 2 vCPU per task
       memoryMiB: 4096,        // 4 GB RAM per task
       retryAttempts: 3,       // Retry failed tasks 3 times
       timeoutMinutes: 120,    // 2 hour timeout per task
+    },
+    // Browser Task Configuration (Heavy - Selenium/JSR223)
+    browserTask: {
+      vcpus: 4,               // 4 vCPU per task (2x API)
+      memoryMiB: 8192,        // 8 GB RAM per task (2x API)
+      retryAttempts: 3,       // Retry failed tasks 3 times
+      timeoutMinutes: 240,    // 4 hour timeout (browser tests slower)
     },
   },
   
@@ -75,11 +82,21 @@ export const config = {
  *   "testSuite": [
  *     {
  *       "testId": "api-load-test",
+ *       "testType": "api",
  *       "testScript": "tests/api-load.jmx",
  *       "numOfContainers": 3,
  *       "threads": 100,
  *       "duration": "15m",
  *       "dataFiles": ["data/users.csv", "data/products.csv"],
+ *       "execute": true
+ *     },
+ *     {
+ *       "testId": "browser-selenium-test",
+ *       "testType": "browser",
+ *       "testScript": "tests/browser/ui-flow.jmx",
+ *       "numOfContainers": 2,
+ *       "threads": 10,
+ *       "duration": "30m",
  *       "execute": true
  *     }
  *   ]
@@ -87,6 +104,7 @@ export const config = {
  */
 export interface TestConfig {
   testId: string;
+  testType?: 'api' | 'browser';  // Test type (defaults to 'api')
   testScript: string;
   numOfContainers: number;
   threads: number;
