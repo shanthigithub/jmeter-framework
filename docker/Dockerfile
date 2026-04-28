@@ -106,6 +106,10 @@ RUN cd ${JMETER_HOME}/lib \
     && curl -fSL --retry 3 --retry-delay 2 \
         https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.25.0/selenium-support-4.25.0.jar \
         -o selenium-support-4.25.0.jar \
+    # Selenium Logger (for suppressing verbose driver logs)
+    && curl -fSL --retry 3 --retry-delay 2 \
+        https://repo1.maven.org/maven2/com/titusfortner/selenium-logger/2.0.0/selenium-logger-2.0.0.jar \
+        -o selenium-logger-2.0.0.jar \
     && echo "✅ Selenium WebDriver installed for browser automation"
 
 # Verify browser installation
