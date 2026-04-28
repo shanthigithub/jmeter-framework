@@ -492,7 +492,10 @@ export class JMeterEcsStack extends cdk.Stack {
     // Task: Merge Results
     const mergeResultsTask = new tasks.LambdaInvoke(this, 'MergeResults', {
       lambdaFunction: mergeResultsFn,
-      payload: sfn.TaskInput.fromJsonPathAt('$'),
+      payload: sfn.TaskInput.fromObject({
+        'tasks.$': '$.tasksResult.Payload.tasks',
+        'runId.$': '$.runId',
+      }),
       resultPath: '$.mergeResult',
     });
 
