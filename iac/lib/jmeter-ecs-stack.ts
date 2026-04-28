@@ -413,6 +413,7 @@ export class JMeterEcsStack extends cdk.Stack {
         payload: sfn.TaskInput.fromObject({
           'testScript.$': '$.testScript',
           'testId.$': '$.testId',
+          'testType.$': '$.testType',
           'execute.$': '$.execute',
           'enableDatadog.$': '$.enableDatadog',
           'datadogSite.$': '$.datadogSite',
