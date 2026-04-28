@@ -48,7 +48,7 @@ ENV PATH="/opt/jmeter/bin:${PATH}"
 ENV JMETER_HOME="/opt/jmeter"
 
 # Browser environment variables for headless execution
-ENV CHROME_BIN=/usr/bin/chromium-browser \
+ENV CHROME_BIN=/usr/bin/chromium \
     CHROME_PATH=/usr/lib/chromium/ \
     CHROMIUM_FLAGS="--disable-software-rasterizer --disable-dev-shm-usage --no-sandbox --disable-gpu" \
     DISPLAY=:99
