@@ -55,10 +55,10 @@ def lambda_handler(event, context):
             raise ValueError("'testSuite' must be a list")
         
         # Check if Datadog metrics should be enabled (from workflow input)
-        # Workflow sends 'enable_datadog_metrics' (snake_case)
-        enable_datadog_from_workflow = event.get('enable_datadog_metrics', '').lower() == 'yes'
+        # Workflow sends 'enable_datadog_metrics' (snake_case) with value 'true' or 'false'
+        enable_datadog_from_workflow = event.get('enable_datadog_metrics', '').lower() == 'true'
         if enable_datadog_from_workflow:
-            print("🐶 Datadog metrics enabled via workflow input (enable_datadog_metrics=yes)")
+            print("🐶 Datadog metrics enabled via workflow input (enable_datadog_metrics=true)")
         
         # Validate and enrich each test
         for idx, test in enumerate(test_suite):

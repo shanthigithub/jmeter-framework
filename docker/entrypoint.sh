@@ -317,11 +317,6 @@ export JVM_ARGS
 
 # Run JMeter
 echo "=========================================="
-echo "[RUN] Running JMeter Test"
-echo "=========================================="
-echo "[COMMAND] $@"
-echo ""
-
 # Verify JMeter binary exists
 if command -v jmeter >/dev/null 2>&1; then
     echo "[INFO] JMeter binary: $(which jmeter)"
