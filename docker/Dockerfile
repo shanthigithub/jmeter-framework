@@ -49,7 +49,7 @@ RUN cd /opt/jmeter/lib/ext \
     # Install BlazeMeter (bzm) plugins from Maven
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-parallel/0.11/jmeter-parallel-0.11.jar -o jmeter-parallel-0.11.jar \
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-plugins-random-csv-data-set/0.8/jmeter-plugins-random-csv-data-set-0.8.jar -o jmeter-plugins-random-csv-data-set-0.8.jar \
-    && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-plugins-weighted-switch-controller/0.6/jmeter-plugins-weighted-switch-controller-0.6.jar -o jmeter-plugins-weighted-switch-controller-0.6.jar \
+    && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-plugins-wsc/0.7/jmeter-plugins-wsc-0.7.jar -o jmeter-plugins-wsc-0.7.jar \
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/com/blazemeter/jmeter-bzm-http2/1.4/jmeter-bzm-http2-1.4.jar -o jmeter-bzm-http2-1.4.jar \
     # Download dependencies for plugins
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/kg/apc/perfmon/2.2.2/perfmon-2.2.2.jar -o perfmon-2.2.2.jar \
