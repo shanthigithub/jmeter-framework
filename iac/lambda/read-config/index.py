@@ -89,6 +89,13 @@ def lambda_handler(event, context):
             if 'execute' not in test:
                 test['execute'] = True
             
+            # Default testType to 'api' if not specified
+            if 'testType' not in test:
+                test['testType'] = 'api'
+                print(f"  Default testType=api for: {test['testId']}")
+            else:
+                print(f"  testType={test['testType']} for: {test['testId']}")
+            
             # Override Datadog setting if workflow input says yes
             # Workflow input takes precedence over config file
             if enable_datadog_from_workflow:
