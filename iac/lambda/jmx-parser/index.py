@@ -128,7 +128,10 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
         tg_name = thread_group.get('testname', f'Thread Group {i}')
         
         # Extract thread count (resolve variables) - search only within this thread group
-        tg_threads_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.num_threads', default='1')
+        # Try intProp first (JMeter 5.x uses intProp), then stringProp as fallback
+        tg_threads_str = get_element_value_local(thread_group, 'intProp', 'ThreadGroup.num_threads', default='')
+        if not tg_threads_str:
+            tg_threads_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.num_threads', default='1')
         tg_threads_str = resolve_variable(tg_threads_str, user_variables)
         try:
             tg_threads = int(tg_threads_str)
@@ -138,7 +141,10 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
         total_threads += tg_threads
         
         # Extract ramp-up time (resolve variables)
-        tg_ramp_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.ramp_time', default='1')
+        # Try intProp first (JMeter 5.x uses intProp), then stringProp as fallback
+        tg_ramp_str = get_element_value_local(thread_group, 'intProp', 'ThreadGroup.ramp_time', default='')
+        if not tg_ramp_str:
+            tg_ramp_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.ramp_time', default='1')
         tg_ramp_str = resolve_variable(tg_ramp_str, user_variables)
         try:
             tg_ramp = int(tg_ramp_str)
@@ -154,7 +160,10 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
         tg_duration_formatted = None
         if tg_use_scheduler:
             use_scheduler = True
-            tg_duration_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.duration', default='300')
+            # Try intProp first, then stringProp
+            tg_duration_str = get_element_value_local(thread_group, 'intProp', 'ThreadGroup.duration', default='')
+            if not tg_duration_str:
+                tg_duration_str = get_element_value_local(thread_group, 'stringProp', 'ThreadGroup.duration', default='300')
             # Resolve duration variable if present (e.g., ${TestDuration})
             tg_duration_str = resolve_variable(tg_duration_str, user_variables)
             try:
