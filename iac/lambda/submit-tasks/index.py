@@ -60,15 +60,13 @@ def lambda_handler(event, context):
                 print(f"   Test data: {json.dumps(test, indent=2)}")
                 raise ValueError(error_msg)
             
-            if 'threads' not in test:
-                raise ValueError(f"Test '{test_id}': threads field is missing. JMX parsing may have failed.")
-            
-            if 'duration' not in test:
-                raise ValueError(f"Test '{test_id}': duration field is missing. JMX parsing may have failed.")
+            if 'testDetails' not in test:
+                raise ValueError(f"Test '{test_id}': testDetails field is missing. JMX parsing may have failed.")
             
             num_containers = test['numOfContainers']
-            threads = test['threads']
-            duration = test['duration']
+            threads = test['testDetails'].get('totalThreads', 0)
+            # Duration is now in threadGroups, get from first group or use estimatedDurationSeconds
+            duration = test['testDetails'].get('estimatedDurationSeconds', 300)
             data_partitions = test.get('dataPartitions', [])
             jvm_args = test.get('jvmArgs', '-Xms512m -Xmx2g')
             jmeter_props = test.get('jmeterProperties', {})
