@@ -359,10 +359,11 @@ echo ""
 echo "=========================================="
 echo "[RUN] Running JMeter Test (with timeout protection)"
 echo "=========================================="
-echo "[COMMAND] timeout ${TASK_TIMEOUT}s $@"
+echo "[COMMAND] timeout -t ${TASK_TIMEOUT} $@"
 echo ""
 
-timeout --preserve-status ${TASK_TIMEOUT} "$@" 2>&1
+# BusyBox timeout syntax: timeout -t SECONDS COMMAND
+timeout -t ${TASK_TIMEOUT} "$@" 2>&1
 JMETER_RAW_EXIT=$?
 
 echo ""
