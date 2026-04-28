@@ -41,3 +41,9 @@ results/
 # Git ignore for uploaded files
 github-actions-trust-policy.json
 github-actions-permissions.json
+
+# Prevent markdown documentation files
+*.md
+*.MD
+README*
+CHANGELOG*
