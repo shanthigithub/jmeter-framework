@@ -224,8 +224,6 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
         estimated_duration_seconds = 300
     
     num_threads = total_threads
-    ramp_time = max_ramp_time
-    thread_group_name = f"{len(thread_groups)} Thread Groups" if len(thread_groups) > 1 else thread_groups[0].get('testname', 'Thread Group')
     
     # Calculate optimal number of containers
     print(f"💡 Total threads across {len(thread_groups)} thread group(s): {num_threads}")
@@ -244,33 +242,15 @@ def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str,
     # Auto-detect CSV data files referenced in JMX
     data_files = extract_csv_data_files(root)
     
-    # Build testDetails dynamically based on test type
+    # Build testDetails - cleaner format with no duplicate info
     test_details = {
         'TotalThreadGroups': len(thread_groups),
-        'threadGroupName': thread_group_name,
         'totalThreads': num_threads,
-        'threadGroups': thread_group_details,  # List of all thread groups with their details
-        'rampTime': ramp_time,
-        'scheduler': use_scheduler,
+        'threadGroups': thread_group_details,  # All details are in thread groups
+        'estimatedDurationSeconds': estimated_duration_seconds
     }
     
-    # Add EITHER duration OR iterations (not both) based on what's configured
-    if use_scheduler and duration:
-        # Duration-based test
-        test_details['duration'] = duration
-        test_details['estimatedDurationSeconds'] = estimated_duration_seconds
-    elif iterations is not None:
-        # Iteration-based test
-        test_details['iterations'] = iterations
-        test_details['estimatedDurationSeconds'] = estimated_duration_seconds
-    else:
-        # Infinite loop or unknown
-        test_details['estimatedDurationSeconds'] = estimated_duration_seconds
-    
     result = {
-        'threads': num_threads,
-        'duration': duration,
-        'iterations': iterations,
         'numOfContainers': num_containers,
         'jvmArgs': jvm_args,
         'jmeterProperties': jmeter_properties,
