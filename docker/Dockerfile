@@ -57,11 +57,12 @@ RUN cd /opt/jmeter/lib/ext \
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.12.0/commons-lang3-3.12.0.jar -o commons-lang3-3.12.0.jar \
     # Install additional useful plugins
     && curl -fSL --retry 3 --retry-delay 2 https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-graphs-basic/2.0/jmeter-plugins-graphs-basic-2.0.jar -o jmeter-plugins-graphs-basic-2.0.jar \
-    # Verify all JARs are valid
+    # Verify all JARs are valid using unzip (jar command not available in Alpine JRE)
     && echo "Verifying downloaded JARs..." \
-    && for jar in *.jar; do \
-        if ! jar tf "$jar" > /dev/null 2>&1; then \
-            echo "ERROR: Corrupted JAR detected: $jar"; \
+    && for jarfile in *.jar; do \
+        if ! unzip -t "$jarfile" > /dev/null 2>&1; then \
+            echo "ERROR: Corrupted JAR detected: $jarfile"; \
+            ls -lh "$jarfile"; \
             exit 1; \
         fi; \
     done \
