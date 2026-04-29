@@ -27,15 +27,22 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
     && apt-get update \
     && apt-get install -y google-chrome-stable
 
-# Install ChromeDriver for Selenium
-RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1) \
-    && wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}" -O /tmp/chromedriver-version \
+# Install ChromeDriver for Selenium using new Chrome for Testing API
+# The old chromedriver.storage.googleapis.com has been deprecated
+RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}') \
+    && echo "Chrome version: ${CHROME_VERSION}" \
+    && wget -q "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_VERSION%%.*}" -O /tmp/chromedriver-version 2>&1 \
+    && if [ ! -s /tmp/chromedriver-version ]; then \
+        echo "Failed to get ChromeDriver version for Chrome ${CHROME_VERSION}, trying latest stable..."; \
+        wget -q "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE" -O /tmp/chromedriver-version; \
+    fi \
     && CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver-version) \
-    && wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
+    && echo "ChromeDriver version: ${CHROMEDRIVER_VERSION}" \
+    && wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver.zip \
     && unzip /tmp/chromedriver.zip -d /tmp \
-    && mv /tmp/chromedriver /usr/local/bin/chromedriver \
+    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
     && chmod +x /usr/local/bin/chromedriver \
-    && rm /tmp/chromedriver.zip /tmp/chromedriver-version
+    && rm -rf /tmp/chromedriver.zip /tmp/chromedriver-linux64 /tmp/chromedriver-version
 
 # Install remaining dependencies
 RUN apt-get update && apt-get install -y \
