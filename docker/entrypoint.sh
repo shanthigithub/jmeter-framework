@@ -370,11 +370,13 @@ elif [ "$FILE_EXTENSION" = "js" ]; then
         exit 1
     fi
     
-    # Copy lib/ directory to /tmp so relative requires work
-    echo "[SETUP] Copying test framework libraries to /tmp..."
+    # Copy lib/ directory to root /lib so ../lib/test-runner resolves correctly
+    # From /tmp/test.js, ../lib/test-runner resolves to /lib/test-runner
+    echo "[SETUP] Copying test framework libraries to /lib..."
     if [ -d "/jmeter/lib" ]; then
-        cp -r /jmeter/lib /tmp/
-        echo "  ✅ Copied /jmeter/lib → /tmp/lib"
+        cp -r /jmeter/lib /lib
+        echo "  ✅ Copied /jmeter/lib → /lib"
+        echo "  ℹ️  Path resolution: /tmp/test.js -> require('../lib/test-runner') -> /lib/test-runner"
     else
         echo "  ⚠️  Warning: /jmeter/lib not found"
     fi
