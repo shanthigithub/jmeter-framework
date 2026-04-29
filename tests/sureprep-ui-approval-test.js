@@ -23,7 +23,7 @@ const https = require('https');
 // Configuration - Built-in defaults (can be overridden via env vars)
 const config = {
   // Load testing parameters (equivalent to JMeter Thread Group)
-  parallelUsers: parseInt(process.env.PARALLEL_USERS || '10'), // Number of concurrent browsers (like Thread Count)
+  parallelUsers: parseInt(process.env.PARALLEL_USERS || '5'), // Number of concurrent browsers (like Thread Count)
   iterations: parseInt(process.env.ITERATIONS || '3'), // Number of times to run this test (like Loop Count)
   thinkTime: parseInt(process.env.THINK_TIME || '2000'), // Delay between actions in ms (like Think Time)
   
@@ -174,6 +174,45 @@ async function takeScreenshot(page, name) {
 }
 
 /**
+ * Transaction Timer - Measures elapsed time for each action (like JMeter)
+ */
+class TransactionTimer {
+  constructor(userId, actionName) {
+    this.userId = userId;
+    this.actionName = actionName;
+    this.startTime = Date.now();
+  }
+  
+  end(status = 'success') {
+    const elapsed = Date.now() - this.startTime;
+    const statusIcon = status === 'success' ? '✅' : '❌';
+    console.log(`   ${statusIcon} [${elapsed}ms] ${this.actionName}`);
+    
+    return {
+      action: this.actionName,
+      userId: this.userId,
+      elapsed: elapsed,
+      status: status,
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+/**
+ * Timed action wrapper - executes action and measures response time
+ */
+async function timedAction(userId, actionName, actionFn) {
+  const timer = new TransactionTimer(userId, actionName);
+  try {
+    const result = await actionFn();
+    return { ...timer.end('success'), result };
+  } catch (error) {
+    timer.end('failed');
+    throw error;
+  }
+}
+
+/**
  * Run a single user's test (can be called in parallel)
  */
 async function runUser(userId, iterationNumber) {
@@ -182,172 +221,242 @@ async function runUser(userId, iterationNumber) {
   
   let browser;
   let page;
+  const actionTimings = []; // Store all action timings
   
   try {
     // Step 1: Get Salesforce access token
     console.log('Step 1: Authenticating with Salesforce...');
-    const authData = await getSalesforceAccessToken();
-    console.log(`✅ Authentication successful: ${authData.instance_url}`);
+    const authTiming = await timedAction(userId, 'OAuth Authentication', async () => {
+      return await getSalesforceAccessToken();
+    });
+    const authData = authTiming.result;
+    actionTimings.push(authTiming);
     
     // Step 2: Launch browser
     console.log('Step 2: Launching browser...');
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-software-rasterizer'
-      ]
+    const browserTiming = await timedAction(userId, 'Launch Browser', async () => {
+      const b = await chromium.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-software-rasterizer'
+        ]
+      });
+      
+      const context = await b.newContext({
+        viewport: { width: 1920, height: 1080 },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      });
+      
+      const p = await context.newPage();
+      p.setDefaultTimeout(config.defaultTimeout);
+      return { browser: b, page: p };
     });
+    browser = browserTiming.result.browser;
+    page = browserTiming.result.page;
+    actionTimings.push(browserTiming);
     
-    const context = await browser.newContext({
-      viewport: { width: 1920, height: 1080 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    });
-    
-    page = await context.newPage();
-    page.setDefaultTimeout(config.defaultTimeout);
-    
-    // Step 3: Navigate to Salesforce with access token
+    // Step 3: Navigate to Salesforce
     console.log('Step 3: Opening Salesforce...');
-    await page.goto(`${authData.instance_url}/secur/frontdoor.jsp?sid=${authData.access_token}`, {
-      timeout: config.navigationTimeout,
-      waitUntil: 'networkidle'
-    });
-    await page.waitForLoadState('domcontentloaded');
-    await takeScreenshot(page, 'salesforce_home');
-    console.log('✅ Salesforce opened successfully');
+    await timedAction(userId, 'Navigate to Salesforce', async () => {
+      await page.goto(`${authData.instance_url}/secur/frontdoor.jsp?sid=${authData.access_token}`, {
+        timeout: config.navigationTimeout,
+        waitUntil: 'networkidle'
+      });
+      await page.waitForLoadState('domcontentloaded');
+      await takeScreenshot(page, 'salesforce_home');
+    }).then(t => actionTimings.push(t));
     
-    // Step 4: Navigate to Accounts and create new account
-    console.log('Step 4: Creating Account...');
-    await page.click("//\*[@title='Accounts']");
-    await page.waitForTimeout(2000);
+    // Step 4: Navigate to Accounts tab
+    console.log('Step 4: Navigate to Accounts...');
+    await timedAction(userId, 'Click Accounts Tab', async () => {
+      await page.click("//\*[@title='Accounts']");
+      await page.waitForTimeout(2000);
+    }).then(t => actionTimings.push(t));
     
-    await page.click("//button[contains(text(),'New')]");
-    await page.waitForTimeout(2000);
+    // Step 5: Click New Account button
+    await timedAction(userId, 'Click New Account Button', async () => {
+      await page.click("//button[contains(text(),'New')]");
+      await page.waitForTimeout(2000);
+    }).then(t => actionTimings.push(t));
     
-    // Fill account details
-    await page.fill("//input[@name='Name']", config.accountName);
+    // Step 6: Fill Account Name
+    await timedAction(userId, 'Fill Account Name', async () => {
+      await page.fill("//input[@name='Name']", config.accountName);
+    }).then(t => actionTimings.push(t));
     
-    // Select country: UNITED STATES
-    await page.click("//\*[@name='country']");
-    await page.click("//\*[@title='UNITED STATES']");
-    await page.waitForTimeout(1000);
+    // Step 7: Select Country
+    await timedAction(userId, 'Select Country (UNITED STATES)', async () => {
+      await page.click("//\*[@name='country']");
+      await page.click("//\*[@title='UNITED STATES']");
+      await page.waitForTimeout(1000);
+    }).then(t => actionTimings.push(t));
     
-    // Select state: TEXAS
-    await page.click("//\*[@name='state']");
-    await page.click("//\*[@title='TEXAS']");
-    await page.waitForTimeout(1000);
+    // Step 8: Select State
+    await timedAction(userId, 'Select State (TEXAS)', async () => {
+      await page.click("//\*[@name='state']");
+      await page.click("//\*[@title='TEXAS']");
+      await page.waitForTimeout(1000);
+    }).then(t => actionTimings.push(t));
     
-    // Save account
-    await page.click("//button[@name='SaveEdit']");
-    await page.waitForTimeout(3000);
-    await takeScreenshot(page, 'account_created');
-    console.log(`✅ Account created: ${config.accountName}`);
+    // Step 9: Save Account
+    await timedAction(userId, 'Save Account', async () => {
+      await page.click("//button[@name='SaveEdit']");
+      await page.waitForTimeout(3000);
+      await takeScreenshot(page, 'account_created');
+    }).then(t => actionTimings.push(t));
     
-    // Step 5: Create Contact
+    // Step 10: Navigate to Contacts
     console.log('Step 5: Creating Contact...');
-    await page.click("//\*[contains(text(),'Contacts')]");
-    await page.waitForTimeout(2000);
+    await timedAction(userId, 'Click Contacts Tab', async () => {
+      await page.click("//\*[contains(text(),'Contacts')]");
+      await page.waitForTimeout(2000);
+    }).then(t => actionTimings.push(t));
     
-    await page.click("//button[contains(text(),'New')]");
-    await page.waitForTimeout(2000);
+    // Step 11: Click New Contact
+    await timedAction(userId, 'Click New Contact Button', async () => {
+      await page.click("//button[contains(text(),'New')]");
+      await page.waitForTimeout(2000);
+    }).then(t => actionTimings.push(t));
     
-    // Fill contact details
-    await page.fill("//input[@name='firstName']", config.contactFirstName);
-    await page.fill("//input[@name='lastName']", config.contactLastName);
+    // Step 12: Fill Contact Details
+    await timedAction(userId, 'Fill Contact Name', async () => {
+      await page.fill("//input[@name='firstName']", config.contactFirstName);
+      await page.fill("//input[@name='lastName']", config.contactLastName);
+    }).then(t => actionTimings.push(t));
     
-    // Select language preference
-    await page.click("(//*[@aria-label='Language Preference'])[1]");
-    await page.click("//\*[@data-value='English']");
-    await page.waitForTimeout(1000);
+    // Step 13: Select Language
+    await timedAction(userId, 'Select Language Preference', async () => {
+      await page.click("(//*[@aria-label='Language Preference'])[1]");
+      await page.click("//\*[@data-value='English']");
+      await page.waitForTimeout(1000);
+    }).then(t => actionTimings.push(t));
     
-    // Save contact
-    await page.click("//button[@name='SaveEdit']");
-    await page.waitForTimeout(3000);
-    await takeScreenshot(page, 'contact_created');
-    console.log(`✅ Contact created: ${config.contactFirstName} ${config.contactLastName}`);
+    // Step 14: Save Contact
+    await timedAction(userId, 'Save Contact', async () => {
+      await page.click("//button[@name='SaveEdit']");
+      await page.waitForTimeout(3000);
+      await takeScreenshot(page, 'contact_created');
+    }).then(t => actionTimings.push(t));
     
-    // Step 6: Create New Opportunity
+    // Step 15: Create New Opportunity
     console.log('Step 6: Creating Opportunity...');
-    await page.click("//\*[@name='Contact.LTGS_New_Opportunity']");
-    await page.waitForTimeout(3000);
+    await timedAction(userId, 'Click New Opportunity Button', async () => {
+      await page.click("//\*[@name='Contact.LTGS_New_Opportunity']");
+      await page.waitForTimeout(3000);
+    }).then(t => actionTimings.push(t));
     
-    // Fill opportunity details
-    await page.fill("//input[@name='Name']", config.opportunityName);
+    // Step 16: Fill Opportunity Name
+    await timedAction(userId, 'Fill Opportunity Name', async () => {
+      await page.fill("//input[@name='Name']", config.opportunityName);
+    }).then(t => actionTimings.push(t));
     
-    // Select Stage: 1 Lead Management
-    await page.click("//button[@aria-label='Stage']");
-    await page.click("//\*[@data-value='1 Lead Management']");
-    await page.waitForTimeout(1000);
+    // Step 17: Select Stage
+    await timedAction(userId, 'Select Stage (1 Lead Management)', async () => {
+      await page.click("//button[@aria-label='Stage']");
+      await page.click("//\*[@data-value='1 Lead Management']");
+      await page.waitForTimeout(1000);
+    }).then(t => actionTimings.push(t));
     
-    // Select Brand: Checkpoint
-    await page.click("//button[@aria-label='Brand']");
-    await page.click("//\*[@data-value='Checkpoint']");
-    await page.waitForTimeout(1000);
+    // Step 18: Select Brand
+    await timedAction(userId, 'Select Brand (Checkpoint)', async () => {
+      await page.click("//button[@aria-label='Brand']");
+      await page.click("//\*[@data-value='Checkpoint']");
+      await page.waitForTimeout(1000);
+    }).then(t => actionTimings.push(t));
     
-    // Save opportunity
-    await page.click("//button[@name='SaveEdit']");
-    await page.waitForTimeout(3000);
-    await takeScreenshot(page, 'opportunity_created');
-    console.log(`✅ Opportunity created: ${config.opportunityName}`);
+    // Step 19: Save Opportunity
+    await timedAction(userId, 'Save Opportunity', async () => {
+      await page.click("//button[@name='SaveEdit']");
+      await page.waitForTimeout(3000);
+      await takeScreenshot(page, 'opportunity_created');
+    }).then(t => actionTimings.push(t));
     
-    // Step 7: Edit Opportunity to add more details
+    // Step 20: Edit Opportunity
     console.log('Step 7: Editing Opportunity...');
-    await page.waitForTimeout(5000);
-    await page.click("(//*[@name='Edit'])[2]");
-    await page.waitForTimeout(3000);
+    await timedAction(userId, 'Click Edit Opportunity', async () => {
+      await page.waitForTimeout(5000);
+      await page.click("(//*[@name='Edit'])[2]");
+      await page.waitForTimeout(3000);
+    }).then(t => actionTimings.push(t));
     
-    // Step 8: Create SSD (Sales Support Document)
+    // Step 21: Create SSD
     console.log('Step 8: Creating SSD...');
-    await page.click("//\*[contains(text(),'Create SSD')]");
-    await page.waitForTimeout(3000);
+    await timedAction(userId, 'Click Create SSD Button', async () => {
+      await page.click("//\*[contains(text(),'Create SSD')]");
+      await page.waitForTimeout(3000);
+    }).then(t => actionTimings.push(t));
     
-    // Switch to SSD iframe if needed
-    const frames = page.frames();
-    let ssdFrame = page;
-    for (const frame of frames) {
-      const title = await frame.title().catch(() => '');
-      if (title.includes('SSD') || title.includes('Sales Support')) {
-        ssdFrame = frame;
-        break;
+    // Step 22: Select SSD Sales Org
+    await timedAction(userId, 'Select SSD Sales Org (Global)', async () => {
+      const frames = page.frames();
+      let ssdFrame = page;
+      for (const frame of frames) {
+        const title = await frame.title().catch(() => '');
+        if (title.includes('SSD') || title.includes('Sales Support')) {
+          ssdFrame = frame;
+          break;
+        }
       }
-    }
+      await ssdFrame.selectOption("//select[@id='mainPg:mainFrm:entryBlock:ssdSalesOrg']", { label: 'Global' });
+      await page.waitForTimeout(2000);
+    }).then(t => actionTimings.push(t));
     
-    // Select Global sales org
-    await ssdFrame.selectOption("//select[@id='mainPg:mainFrm:entryBlock:ssdSalesOrg']", { label: 'Global' });
-    await page.waitForTimeout(2000);
+    // Step 23: Save SSD
+    await timedAction(userId, 'Save SSD', async () => {
+      const frames = page.frames();
+      let ssdFrame = page;
+      for (const frame of frames) {
+        const title = await frame.title().catch(() => '');
+        if (title.includes('SSD') || title.includes('Sales Support')) {
+          ssdFrame = frame;
+          break;
+        }
+      }
+      await ssdFrame.click("//input[@value='Save']");
+      await page.waitForTimeout(3000);
+      await takeScreenshot(page, 'ssd_created');
+    }).then(t => actionTimings.push(t));
     
-    // Fill SSD details and save
-    await ssdFrame.click("//input[@value='Save']");
-    await page.waitForTimeout(3000);
-    await takeScreenshot(page, 'ssd_created');
-    console.log('✅ SSD created successfully');
-    
-    // Step 9: Add Products
+    // Step 24: Navigate to Products
     console.log('Step 9: Adding Products...');
-    await page.click("//\*[contains(text(),'Products')]");
-    await page.waitForTimeout(3000);
+    await timedAction(userId, 'Click Products Tab', async () => {
+      await page.click("//\*[contains(text(),'Products')]");
+      await page.waitForTimeout(3000);
+    }).then(t => actionTimings.push(t));
     
-    await page.click("//button[contains(text(),'Choose Price Book')]");
-    await page.waitForTimeout(2000);
+    // Step 25: Choose Price Book
+    await timedAction(userId, 'Click Choose Price Book', async () => {
+      await page.click("//button[contains(text(),'Choose Price Book')]");
+      await page.waitForTimeout(2000);
+    }).then(t => actionTimings.push(t));
     
-    await page.click("//\*[@data-value='Standard Price Book']");
-    await page.click("//button[contains(text(),'Save')]");
-    await page.waitForTimeout(3000);
-    await takeScreenshot(page, 'products_added');
-    console.log('✅ Products configured successfully');
+    // Step 26: Select Standard Price Book
+    await timedAction(userId, 'Select Standard Price Book', async () => {
+      await page.click("//\*[@data-value='Standard Price Book']");
+      await page.click("//button[contains(text(),'Save')]");
+      await page.waitForTimeout(3000);
+      await takeScreenshot(page, 'products_added');
+    }).then(t => actionTimings.push(t));
     
     // User iteration completed successfully
     const duration = ((Date.now() - userStart) / 1000).toFixed(2);
     console.log(`✅ User ${userId}: Iteration ${iterationNumber} completed in ${duration}s`);
+    
+    // Print action timing summary
+    console.log(`\n📊 Action Timings for User ${userId}, Iteration ${iterationNumber}:`);
+    actionTimings.forEach((timing, index) => {
+      console.log(`   ${index + 1}. ${timing.action}: ${timing.elapsed}ms`);
+    });
     
     return {
       success: true,
       userId: userId,
       iteration: iterationNumber,
       duration: parseFloat(duration),
+      actionTimings: actionTimings,
       accountName: config.accountName,
       timestamp: new Date().toISOString()
     };
