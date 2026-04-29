@@ -194,11 +194,11 @@ RUN google-chrome --version \
     && echo "✅ Playwright verified with bundled Chromium"
 
 # Copy Datadog forwarder script
-COPY datadog-forwarder.py /usr/local/bin/datadog-forwarder.py
+COPY docker/datadog-forwarder.py /usr/local/bin/datadog-forwarder.py
 RUN chmod +x /usr/local/bin/datadog-forwarder.py
 
 # Copy Log4j2 configuration (fixes "package scanning deprecated" warning)
-COPY log4j2.xml /opt/jmeter/bin/log4j2.xml
+COPY docker/log4j2.xml /opt/jmeter/bin/log4j2.xml
 
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
@@ -215,7 +215,7 @@ RUN cd /jmeter && npm init -y \
     && echo "✅ Playwright installed locally in /jmeter for test scripts"
 
 # Copy entrypoint script
-COPY entrypoint.sh /entrypoint.sh
+COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Set working directory
