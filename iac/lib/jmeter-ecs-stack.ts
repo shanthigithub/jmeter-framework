@@ -74,10 +74,10 @@ export class JMeterEcsStack extends cdk.Stack {
       topicName: 'test-script-validation',
     });
 
-    // Subscribe team email - update this with your actual email
+    // Subscribe team email
     // Note: You'll need to confirm the subscription via email after deployment
     validationTopic.addSubscription(
-      new subscriptions.EmailSubscription('test-team@company.com')
+      new subscriptions.EmailSubscription('shanthireddy.kundur@gmail.com')
     );
 
     // ═══════════════════════════════════════════════════════════════════════
