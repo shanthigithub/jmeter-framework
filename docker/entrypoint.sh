@@ -370,15 +370,18 @@ elif [ "$FILE_EXTENSION" = "js" ]; then
         exit 1
     fi
     
-    # Copy lib/ directory to root /lib so ../lib/test-runner resolves correctly
+    # Copy lib/ directory contents to root /lib so ../lib/test-runner resolves correctly
     # From /tmp/test.js, ../lib/test-runner resolves to /lib/test-runner
+    # IMPORTANT: Use /jmeter/lib/* to copy CONTENTS, not the directory itself
     echo "[SETUP] Copying test framework libraries to /lib..."
     if [ -d "/jmeter/lib" ]; then
         echo "  [DEBUG] Contents of /jmeter/lib BEFORE copy:"
         ls -la /jmeter/lib || echo "  [ERROR] Failed to list /jmeter/lib"
         
-        cp -r /jmeter/lib /lib
-        echo "  ✅ Copied /jmeter/lib → /lib"
+        # Create /lib if it doesn't exist, then copy contents
+        mkdir -p /lib
+        cp -r /jmeter/lib/* /lib/
+        echo "  ✅ Copied /jmeter/lib/* → /lib/"
         
         echo "  [DEBUG] Contents of /lib AFTER copy:"
         ls -la /lib || echo "  [ERROR] Failed to list /lib"
@@ -388,10 +391,6 @@ elif [ "$FILE_EXTENSION" = "js" ]; then
             echo "  ✅ Found: /lib/test-runner.js"
         else
             echo "  ❌ NOT FOUND: /lib/test-runner.js"
-        fi
-        
-        if [ -f "/lib/lib/test-runner.js" ]; then
-            echo "  ⚠️  EXTRA NESTING! Found: /lib/lib/test-runner.js"
         fi
         
         echo "  ℹ️  Path resolution: /tmp/test.js -> require('../lib/test-runner') -> /lib/test-runner"
