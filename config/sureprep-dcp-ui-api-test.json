@@ -1,0 +1,16 @@
+{
+  "testSuite": [
+    {
+      "testId": "sureprep-ui-approval",
+      "testType": "browser",
+      "testScript": "tests/Sureprep_UI_Approval_AprRelease_27Mar_Headless_Chrome_V1.jmx",
+      "execute": true
+    }
+    {
+      "testId": "dcp-api-test",
+      "testType": "api",
+      "testScript": "tests/DCP_API_May_v3.jmx",
+      "execute": true
+    }
+  ]
+}
