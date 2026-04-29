@@ -490,6 +490,9 @@ elif [ "$FILE_EXTENSION" = "js" ]; then
     export CONTAINER_ID
     export RESULTS_PREFIX
     
+    # Set NODE_PATH so Node.js can find modules installed in /jmeter
+    export NODE_PATH=/jmeter/node_modules
+    
     # Run Node.js script with timeout
     timeout ${TASK_TIMEOUT} node "${TEST_FILE}" 2>&1
     JMETER_RAW_EXIT=$?
