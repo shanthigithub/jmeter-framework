@@ -117,25 +117,69 @@ def parse_playwright_script(script_content: str, test_script: str, property_over
     """
     Parse Playwright/browser test scripts (.js or .py files).
     
-    Since these are not JMX files, we return sensible defaults for browser tests.
-    Browser tests typically run with fewer threads and don't have duration limits.
+    Extracts configuration from the script:
+    - parallelUsers (equivalent to JMeter thread count)
+    - iterations (equivalent to loop count)
+    - Calculates optimal container count based on thread count
     """
     print(f"🎭 Parsing Playwright script: {test_script}")
     
-    # Browser tests typically run single-threaded or with very few threads
-    # The actual test configuration should come from the config JSON
+    # Extract parallelUsers (thread count equivalent)
+    parallel_users = 5  # Default
+    iterations = 1  # Default
+    
+    # Look for: parallelUsers: parseInt(process.env.PARALLEL_USERS || 'N')
+    parallel_users_match = re.search(
+        r'parallelUsers\s*:\s*parseInt\s*\(\s*process\.env\.PARALLEL_USERS\s*\|\|\s*[\'"](\d+)[\'"]',
+        script_content
+    )
+    if parallel_users_match:
+        parallel_users = int(parallel_users_match.group(1))
+        print(f"  └─ Found parallelUsers: {parallel_users}")
+    else:
+        # Try simpler pattern: parallelUsers: N
+        simple_match = re.search(r'parallelUsers\s*:\s*(\d+)', script_content)
+        if simple_match:
+            parallel_users = int(simple_match.group(1))
+            print(f"  └─ Found parallelUsers (simple pattern): {parallel_users}")
+    
+    # Extract iterations
+    iterations_match = re.search(
+        r'iterations\s*:\s*parseInt\s*\(\s*process\.env\.ITERATIONS\s*\|\|\s*[\'"](\d+)[\'"]',
+        script_content
+    )
+    if iterations_match:
+        iterations = int(iterations_match.group(1))
+        print(f"  └─ Found iterations: {iterations}")
+    else:
+        # Try simpler pattern
+        simple_match = re.search(r'iterations\s*:\s*(\d+)', script_content)
+        if simple_match:
+            iterations = int(simple_match.group(1))
+            print(f"  └─ Found iterations (simple pattern): {iterations}")
+    
+    # Calculate containers using the same logic as JMeter
+    num_containers = calculate_containers(parallel_users)
+    print(f"📦 Calculated containers: {num_containers} (based on {parallel_users} parallel users)")
+    
+    # Calculate JVM args based on thread count (even though Node.js, for consistency)
+    jvm_args = calculate_jvm_args(parallel_users)
+    
     result = {
-        'numOfContainers': 1,  # Browser tests typically use 1 container
-        'jvmArgs': '-Xms512m -Xmx2g',  # Minimal JVM settings (may not even be used for Playwright)
-        'jmeterProperties': property_overrides,  # Pass through any custom properties
+        'numOfContainers': num_containers,
+        'jvmArgs': jvm_args,
+        'jmeterProperties': property_overrides,
         'testDetails': {
             'scriptType': 'playwright',
             'scriptFile': test_script,
-            'note': 'Playwright script - configuration from test config JSON'
+            'parallelUsers': parallel_users,
+            'iterations': iterations,
+            'totalThreads': parallel_users,
+            'note': 'Playwright JavaScript test - configuration extracted from script'
         }
     }
     
-    print(f"✅ Playwright script parsed with default browser test settings")
+    print(f"✅ Playwright script parsed: {parallel_users} users, {iterations} iterations, {num_containers} container(s)")
     return result
 
 
