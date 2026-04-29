@@ -147,19 +147,19 @@ RUN npm install -g playwright@1.40.0 \
     && npm install -g @aws-sdk/client-s3 \
     && echo "✅ Node.js Playwright installed"
 
-# Install Python Playwright (DISABLED - using Node.js Playwright only for now)
-# RUN pip3 install --break-system-packages --no-cache-dir playwright==1.40.0 \
-#     && echo "✅ Python Playwright installed"
-
-# Configure Playwright to use system Chromium (already installed via apk)
-# Skip 'playwright install' - we'll use the system Chromium browser
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# Install Playwright's own Chromium browser
+# Skip --with-deps since we already have system dependencies via apk
+# This downloads Playwright's exact tested Chromium version (~170MB)
+RUN playwright install chromium \
+    && echo "✅ Playwright Chromium browser installed"
 
 # Verify all browser installations
-RUN chromium-browser --version && chromedriver --version \
-    && echo "✅ Chromium and ChromeDriver installed successfully" \
-    && node -e "const { chromium } = require('playwright'); console.log('✅ Node.js Playwright verified');"
+# - System Chromium for JMeter/Selenium tests
+# - Playwright's bundled Chromium for Playwright tests
+RUN chromium-browser --version \
+    && chromedriver --version \
+    && echo "✅ System Chromium and ChromeDriver verified" \
+    && node -e "const { chromium } = require('playwright'); console.log('✅ Playwright verified with bundled Chromium');"
 
 # Copy Datadog forwarder script
 COPY datadog-forwarder.py /usr/local/bin/datadog-forwarder.py
