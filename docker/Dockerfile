@@ -203,6 +203,10 @@ COPY log4j2.xml /opt/jmeter/bin/log4j2.xml
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
 
+# Copy test framework libraries (test-runner.js, test-template.js)
+# These are used by Playwright JS tests via require('../lib/test-runner')
+COPY lib /jmeter/lib
+
 # Install Playwright and dependencies locally in /jmeter for test scripts
 # Global install above is for CLI commands, local install is for require()
 RUN cd /jmeter && npm init -y \
