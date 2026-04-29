@@ -202,6 +202,13 @@ COPY log4j2.xml /opt/jmeter/bin/log4j2.xml
 # Create directories
 RUN mkdir -p /jmeter /jmeter/scripts /jmeter/data /jmeter/results
 
+# Install Playwright and dependencies locally in /jmeter for test scripts
+# Global install above is for CLI commands, local install is for require()
+RUN cd /jmeter && npm init -y \
+    && npm install playwright@1.40.0 \
+    && npm install @aws-sdk/client-s3 \
+    && echo "✅ Playwright installed locally in /jmeter for test scripts"
+
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
