@@ -20,10 +20,11 @@ const { chromium } = require('playwright');
 const crypto = require('crypto');
 const https = require('https');
 
-// Configuration (from JMX variables)
+// Configuration - Built-in defaults (can be overridden via env vars)
 const config = {
   // Load testing parameters (equivalent to JMeter Thread Group)
-  iterations: parseInt(process.env.ITERATIONS || '1'), // Number of times to run this test (like Loop Count)
+  parallelUsers: parseInt(process.env.PARALLEL_USERS || '10'), // Number of concurrent browsers (like Thread Count)
+  iterations: parseInt(process.env.ITERATIONS || '3'), // Number of times to run this test (like Loop Count)
   thinkTime: parseInt(process.env.THINK_TIME || '2000'), // Delay between actions in ms (like Think Time)
   
   // Salesforce OAuth settings
@@ -68,7 +69,26 @@ rGL8dX8V+F4kC+zj3myyKTI5BLyro/2W5y2IDtcCkd8ciOYSW+9n22LoS30CJ+tP
   // Timeouts
   defaultTimeout: 120000, // 120 seconds (same as JMX)
   navigationTimeout: 240000, // 240 seconds for login
+  
+  // Datadog tags (for metrics tracking - framework handles automatically)
+  datadogTags: {
+    testId: 'sureprep-ui-approval',
+    testType: 'browser',
+    app: 'salesforce',
+    environment: 'uat',
+    priority: 'high'
+  }
 };
+
+// Log configuration on startup (helps with debugging)
+console.log('📋 Test Configuration:');
+console.log(`   Test ID: ${config.datadogTags.testId}`);
+console.log(`   Test Type: ${config.datadogTags.testType}`);
+console.log(`   App: ${config.datadogTags.app}`);
+console.log(`   Environment: ${config.datadogTags.environment}`);
+console.log(`   Parallel Users: ${config.parallelUsers}`);
+console.log(`   Iterations: ${config.iterations}`);
+console.log(`   Think Time: ${config.thinkTime}ms`);
 
 /**
  * Generate JWT for Salesforce OAuth
@@ -154,13 +174,11 @@ async function takeScreenshot(page, name) {
 }
 
 /**
- * Run a single iteration of the test
+ * Run a single user's test (can be called in parallel)
  */
-async function runIteration(iterationNumber) {
-  const iterationStart = Date.now();
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`🔄 Iteration ${iterationNumber}/${config.iterations}`);
-  console.log(`${'='.repeat(60)}\n`);
+async function runUser(userId, iterationNumber) {
+  const userStart = Date.now();
+  console.log(`👤 User ${userId}: Starting iteration ${iterationNumber}/${config.iterations}`);
   
   let browser;
   let page;
@@ -321,30 +339,29 @@ async function runIteration(iterationNumber) {
     await takeScreenshot(page, 'products_added');
     console.log('✅ Products configured successfully');
     
-    // Iteration completed successfully
-    const duration = ((Date.now() - iterationStart) / 1000).toFixed(2);
-    console.log(`\n✅ Iteration ${iterationNumber} completed in ${duration}s`);
-    console.log(`   Account: ${config.accountName}`);
-    console.log(`   Contact: ${config.contactFirstName} ${config.contactLastName}`);
-    console.log(`   Opportunity: ${config.opportunityName}`);
+    // User iteration completed successfully
+    const duration = ((Date.now() - userStart) / 1000).toFixed(2);
+    console.log(`✅ User ${userId}: Iteration ${iterationNumber} completed in ${duration}s`);
     
     return {
       success: true,
+      userId: userId,
       iteration: iterationNumber,
       duration: parseFloat(duration),
+      accountName: config.accountName,
       timestamp: new Date().toISOString()
     };
     
   } catch (error) {
-    console.error(`\n❌ Iteration ${iterationNumber} failed: ${error.message}`);
-    console.error(error.stack);
+    console.error(`❌ User ${userId}: Iteration ${iterationNumber} failed: ${error.message}`);
     
     if (page) {
-      await takeScreenshot(page, `error_iteration_${iterationNumber}`);
+      await takeScreenshot(page, `error_user${userId}_iter${iterationNumber}`);
     }
     
     return {
       success: false,
+      userId: userId,
       iteration: iterationNumber,
       error: error.message,
       timestamp: new Date().toISOString()
@@ -358,60 +375,115 @@ async function runIteration(iterationNumber) {
 }
 
 /**
- * Main test function - runs all iterations
+ * Run a single user through all iterations
+ */
+async function runUserWorkload(userId) {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`👤 USER ${userId} STARTING`);
+  console.log(`${'='.repeat(60)}`);
+  
+  const userResults = [];
+  
+  for (let iteration = 1; iteration <= config.iterations; iteration++) {
+    const result = await runUser(userId, iteration);
+    userResults.push(result);
+    
+    // Think time between iterations (except after last one)
+    if (iteration < config.iterations) {
+      console.log(`👤 User ${userId}: Waiting ${config.thinkTime}ms before next iteration...`);
+      await new Promise(resolve => setTimeout(resolve, config.thinkTime));
+    }
+  }
+  
+  const successCount = userResults.filter(r => r.success).length;
+  const failureCount = userResults.filter(r => !r.success).length;
+  
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`👤 USER ${userId} COMPLETED`);
+  console.log(`   Iterations: ${config.iterations}`);
+  console.log(`   Successful: ${successCount} ✅`);
+  console.log(`   Failed: ${failureCount} ❌`);
+  console.log(`${'='.repeat(60)}\n`);
+  
+  return {
+    userId,
+    results: userResults,
+    successCount,
+    failureCount
+  };
+}
+
+/**
+ * Main test function - runs parallel users
  */
 async function main() {
   const testStart = Date.now();
   console.log('🚀 Starting Sureprep UI Approval Test');
   console.log(`📊 Configuration:`);
-  console.log(`   - Iterations: ${config.iterations}`);
+  console.log(`   - Parallel Users: ${config.parallelUsers}`);
+  console.log(`   - Iterations per User: ${config.iterations}`);
   console.log(`   - Think Time: ${config.thinkTime}ms`);
+  console.log(`   - Total Executions: ${config.parallelUsers * config.iterations}`);
   console.log(`   - Environment: ${config.loginUrl}`);
   
-  const results = [];
-  let successCount = 0;
-  let failureCount = 0;
+  // Launch all users in parallel
+  console.log(`\n🚀 Launching ${config.parallelUsers} parallel users...\n`);
   
-  // Run iterations sequentially (browser tests don't scale well in parallel)
-  for (let i = 1; i <= config.iterations; i++) {
-    const result = await runIteration(i);
-    results.push(result);
-    
-    if (result.success) {
-      successCount++;
-    } else {
-      failureCount++;
-    }
-    
-    // Think time between iterations (except after last one)
-    if (i < config.iterations) {
-      console.log(`\n⏸️  Waiting ${config.thinkTime}ms before next iteration...`);
-      await new Promise(resolve => setTimeout(resolve, config.thinkTime));
-    }
+  const userPromises = [];
+  for (let userId = 1; userId <= config.parallelUsers; userId++) {
+    userPromises.push(runUserWorkload(userId));
   }
   
-  // Print summary
+  // Wait for all users to complete
+  const userResults = await Promise.all(userPromises);
+  
+  // Calculate overall statistics
   const totalDuration = ((Date.now() - testStart) / 1000).toFixed(2);
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`📊 TEST SUMMARY`);
-  console.log(`${'='.repeat(60)}`);
-  console.log(`Total Iterations: ${config.iterations}`);
-  console.log(`Successful: ${successCount} ✅`);
-  console.log(`Failed: ${failureCount} ❌`);
-  console.log(`Success Rate: ${((successCount / config.iterations) * 100).toFixed(1)}%`);
-  console.log(`Total Duration: ${totalDuration}s`);
+  let totalExecutions = 0;
+  let totalSuccesses = 0;
+  let totalFailures = 0;
+  const allDurations = [];
   
-  if (successCount > 0) {
-    const avgDuration = results
-      .filter(r => r.success)
-      .reduce((sum, r) => sum + r.duration, 0) / successCount;
-    console.log(`Avg Duration: ${avgDuration.toFixed(2)}s per iteration`);
+  userResults.forEach(user => {
+    totalExecutions += user.results.length;
+    totalSuccesses += user.successCount;
+    totalFailures += user.failureCount;
+    
+    user.results.forEach(result => {
+      if (result.success) {
+        allDurations.push(result.duration);
+      }
+    });
+  });
+  
+  // Print final summary
+  console.log(`\n${'='.repeat(70)}`);
+  console.log(`📊 FINAL TEST SUMMARY`);
+  console.log(`${'='.repeat(70)}`);
+  console.log(`Parallel Users: ${config.parallelUsers}`);
+  console.log(`Iterations per User: ${config.iterations}`);
+  console.log(`Total Executions: ${totalExecutions}`);
+  console.log(`Total Successful: ${totalSuccesses} ✅`);
+  console.log(`Total Failed: ${totalFailures} ❌`);
+  console.log(`Overall Success Rate: ${((totalSuccesses / totalExecutions) * 100).toFixed(1)}%`);
+  console.log(`Total Test Duration: ${totalDuration}s`);
+  
+  if (allDurations.length > 0) {
+    const avgDuration = allDurations.reduce((sum, d) => sum + d, 0) / allDurations.length;
+    const minDuration = Math.min(...allDurations);
+    const maxDuration = Math.max(...allDurations);
+    
+    console.log(`\nPerformance Metrics:`);
+    console.log(`   - Average Duration: ${avgDuration.toFixed(2)}s`);
+    console.log(`   - Min Duration: ${minDuration.toFixed(2)}s`);
+    console.log(`   - Max Duration: ${maxDuration.toFixed(2)}s`);
+    console.log(`   - Throughput: ${(totalExecutions / parseFloat(totalDuration)).toFixed(2)} tests/second`);
   }
   
-  console.log(`${'='.repeat(60)}\n`);
+  console.log(`${'='.repeat(70)}\n`);
   
   // Exit with appropriate code
-  process.exit(failureCount > 0 ? 1 : 0);
+  process.exit(totalFailures > 0 ? 1 : 0);
 }
 
 // Run the test
