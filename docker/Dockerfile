@@ -147,18 +147,17 @@ RUN npm install -g playwright@1.40.0 \
     && npm install -g @aws-sdk/client-s3 \
     && echo "✅ Node.js Playwright installed"
 
-# Install Python Playwright (using the same browsers as Node.js)
-RUN pip3 install --break-system-packages --no-cache-dir playwright==1.40.0 \
-    && echo "✅ Python Playwright installed"
+# Install Python Playwright (DISABLED - using Node.js Playwright only for now)
+# RUN pip3 install --break-system-packages --no-cache-dir playwright==1.40.0 \
+#     && echo "✅ Python Playwright installed"
 
-# Install Playwright browsers once (shared by both Python and Node.js)
+# Install Playwright browsers for Node.js
 RUN playwright install chromium --with-deps \
-    && echo "✅ Playwright Chromium browser installed (shared by Python & Node.js)"
+    && echo "✅ Playwright Chromium browser installed for Node.js"
 
 # Verify all browser installations
 RUN chromium-browser --version && chromedriver --version \
     && echo "✅ Chromium and ChromeDriver installed successfully" \
-    && python3 -c "from playwright.sync_api import sync_playwright; print('✅ Python Playwright verified')" \
     && node -e "const { chromium } = require('playwright'); console.log('✅ Node.js Playwright verified');"
 
 # Copy Datadog forwarder script
