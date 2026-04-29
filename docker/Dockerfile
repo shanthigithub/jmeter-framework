@@ -17,6 +17,22 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && node --version && npm --version
 
+# Install Google Chrome (Chromium in Ubuntu 22.04 requires snap, which doesn't work in Docker)
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable
+
+# Install ChromeDriver for Selenium
+RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1) \
+    && wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}" -O /tmp/chromedriver-version \
+    && CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver-version) \
+    && wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
+    && unzip /tmp/chromedriver.zip -d /tmp \
+    && mv /tmp/chromedriver /usr/local/bin/chromedriver \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm /tmp/chromedriver.zip /tmp/chromedriver-version
+
 # Install remaining dependencies
 RUN apt-get update && apt-get install -y \
     # Java for JMeter
@@ -24,14 +40,10 @@ RUN apt-get update && apt-get install -y \
     # Utilities
     wget \
     bash \
+    unzip \
     # Python and pip
     python3 \
     python3-pip \
-    # Node.js 18 and npm for Playwright (installed from NodeSource)
-    nodejs \
-    # Browser and WebDriver support
-    chromium-browser \
-    chromium-chromedriver \
     # X11 virtual framebuffer for headless browser execution
     xvfb \
     # Fonts and rendering dependencies
@@ -165,11 +177,11 @@ RUN playwright install chromium \
     && echo "✅ Playwright Chromium browser installed"
 
 # Verify all browser installations
-# - System Chromium for JMeter/Selenium tests
+# - Google Chrome for JMeter/Selenium tests
 # - Playwright's bundled Chromium for Playwright tests
-RUN chromium-browser --version \
+RUN google-chrome --version \
     && chromedriver --version \
-    && echo "✅ System Chromium and ChromeDriver verified" \
+    && echo "✅ Google Chrome and ChromeDriver verified" \
     && node -e "const { chromium } = require('playwright'); console.log('✅ Playwright verified with bundled Chromium');"
 
 # Copy Datadog forwarder script
