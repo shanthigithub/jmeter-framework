@@ -184,9 +184,13 @@ RUN npm install -g playwright@1.40.0 \
 RUN playwright install chromium \
     && echo "✅ Playwright Chromium browser installed"
 
-# Create symlink for ChromeDriver so JSR223 scripts can find it at /usr/bin/chromedriver
+# Create symlinks for JSR223 Selenium scripts
+# 1. ChromeDriver: /usr/bin/chromedriver -> /usr/local/bin/chromedriver
+# 2. Chrome binary: /usr/bin/chromium -> /usr/bin/google-chrome
 RUN ln -s /usr/local/bin/chromedriver /usr/bin/chromedriver \
-    && echo "✅ ChromeDriver symlink created: /usr/bin/chromedriver -> /usr/local/bin/chromedriver"
+    && ln -s /usr/bin/google-chrome /usr/bin/chromium \
+    && echo "✅ ChromeDriver symlink: /usr/bin/chromedriver -> /usr/local/bin/chromedriver" \
+    && echo "✅ Chrome binary symlink: /usr/bin/chromium -> /usr/bin/google-chrome"
 
 # Verify all browser installations
 # - Google Chrome for JMeter/Selenium tests
