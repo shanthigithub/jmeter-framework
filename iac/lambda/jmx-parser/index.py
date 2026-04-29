@@ -63,13 +63,22 @@ def lambda_handler(event, context):
         if not test_script or not config_bucket:
             raise ValueError("testScript and configBucket are required")
         
-        # Download JMX file from S3
+        # Download test script file from S3
         print(f"📥 Downloading {test_script} from {config_bucket}")
         response = s3_client.get_object(Bucket=config_bucket, Key=test_script)
-        jmx_content = response['Body'].read().decode('utf-8')
+        file_content = response['Body'].read().decode('utf-8')
         
-        # Parse JMX
-        config = parse_jmx(jmx_content, property_overrides)
+        # Detect file type and parse accordingly
+        if test_script.lower().endswith(('.js', '.py')):
+            # Playwright/browser test script
+            print(f"🎭 Detected browser test script: {test_script}")
+            config = parse_playwright_script(file_content, test_script, property_overrides)
+        elif test_script.lower().endswith('.jmx'):
+            # JMeter JMX file - use existing parse logic
+            print(f"🔧 Detected JMeter JMX file: {test_script}")
+            config = parse_jmx(file_content, property_overrides)
+        else:
+            raise ValueError(f"Unsupported test script type: {test_script}. Must be .jmx, .js, or .py")
         
         # Merge parsed config with original test metadata
         result = {
@@ -102,6 +111,32 @@ def lambda_handler(event, context):
         print(f"❌ Error parsing JMX: {str(e)}")
         # Raise exception for Step Functions to catch
         raise Exception(f"Failed to parse JMX file: {str(e)}")
+
+
+def parse_playwright_script(script_content: str, test_script: str, property_overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parse Playwright/browser test scripts (.js or .py files).
+    
+    Since these are not JMX files, we return sensible defaults for browser tests.
+    Browser tests typically run with fewer threads and don't have duration limits.
+    """
+    print(f"🎭 Parsing Playwright script: {test_script}")
+    
+    # Browser tests typically run single-threaded or with very few threads
+    # The actual test configuration should come from the config JSON
+    result = {
+        'numOfContainers': 1,  # Browser tests typically use 1 container
+        'jvmArgs': '-Xms512m -Xmx2g',  # Minimal JVM settings (may not even be used for Playwright)
+        'jmeterProperties': property_overrides,  # Pass through any custom properties
+        'testDetails': {
+            'scriptType': 'playwright',
+            'scriptFile': test_script,
+            'note': 'Playwright script - configuration from test config JSON'
+        }
+    }
+    
+    print(f"✅ Playwright script parsed with default browser test settings")
+    return result
 
 
 def parse_jmx(jmx_content: str, property_overrides: Dict[str, Any]) -> Dict[str, Any]:
