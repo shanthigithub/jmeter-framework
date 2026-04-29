@@ -151,9 +151,10 @@ RUN npm install -g playwright@1.40.0 \
 # RUN pip3 install --break-system-packages --no-cache-dir playwright==1.40.0 \
 #     && echo "✅ Python Playwright installed"
 
-# Install Playwright browsers for Node.js
-RUN playwright install chromium --with-deps \
-    && echo "✅ Playwright Chromium browser installed for Node.js"
+# Configure Playwright to use system Chromium (already installed via apk)
+# Skip 'playwright install' - we'll use the system Chromium browser
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Verify all browser installations
 RUN chromium-browser --version && chromedriver --version \
