@@ -369,6 +369,15 @@ elif [ "$FILE_EXTENSION" = "js" ]; then
         echo "[DEBUG] PATH=$PATH"
         exit 1
     fi
+    
+    # Copy lib/ directory to /tmp so relative requires work
+    echo "[SETUP] Copying test framework libraries to /tmp..."
+    if [ -d "/jmeter/lib" ]; then
+        cp -r /jmeter/lib /tmp/
+        echo "  ✅ Copied /jmeter/lib → /tmp/lib"
+    else
+        echo "  ⚠️  Warning: /jmeter/lib not found"
+    fi
     echo ""
 fi
 
