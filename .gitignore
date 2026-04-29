@@ -1,5 +1,6 @@
 # JMeter Test Files (stored in S3, not GitHub)
-tests/*.jmx
+# Ignore entire tests directory - test files should be uploaded to S3, not committed to GitHub
+tests/
 data/*.csv
 data/*.txt
 
