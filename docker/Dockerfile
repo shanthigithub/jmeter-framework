@@ -9,11 +9,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # JMeter version
 ARG JMETER_VERSION=5.6.3
 
-# Install Node.js 18 LTS (Playwright requires Node.js 14+)
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-
-# Install dependencies including Datadog agent and browser support
-RUN apt-get update && apt-get install -y \
+# Install Node.js 18 LTS (Playwright requires Node.js 14+) and other dependencies
+# NodeSource setup and package install must be in same RUN command
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get update && apt-get install -y \
     # Java for JMeter
     openjdk-17-jre \
     # Utilities
