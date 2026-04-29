@@ -1,5 +1,6 @@
 # JMeter Batch Docker Image
 # Debian-based for Playwright compatibility, optimized for AWS Batch with S3 dynamic loading
+# Updated: Force rebuild to ensure Playwright is installed locally in /jmeter
 
 FROM ubuntu:22.04
 
