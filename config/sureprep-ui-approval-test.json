@@ -13,6 +13,8 @@
         "test_runner": "playwright-js"
       },
       "parameters": {
+        "ITERATIONS": "5",
+        "THINK_TIME": "3000",
         "CONSUMER_KEY": "3MVG9snQZy6aQDh0Mi6xuTbD1.hKJD6MKrlqsV.vYW5ma0Uj.1tzbHhVpWdqimgfxZePCx88IiYfxL.IcDdzG",
         "USERNAME": "rambabu.chitteti@thomsonreuters.com.uat",
         "LOGIN_URL": "https://test.salesforce.com"

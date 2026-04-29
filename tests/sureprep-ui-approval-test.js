@@ -22,6 +22,10 @@ const https = require('https');
 
 // Configuration (from JMX variables)
 const config = {
+  // Load testing parameters (equivalent to JMeter Thread Group)
+  iterations: parseInt(process.env.ITERATIONS || '1'), // Number of times to run this test (like Loop Count)
+  thinkTime: parseInt(process.env.THINK_TIME || '2000'), // Delay between actions in ms (like Think Time)
+  
   // Salesforce OAuth settings
   consumerKey: process.env.CONSUMER_KEY || '3MVG9snQZy6aQDh0Mi6xuTbD1.hKJD6MKrlqsV.vYW5ma0Uj.1tzbHhVpWdqimgfxZePCx88IiYfxL.IcDdzG',
   username: process.env.USERNAME || 'rambabu.chitteti@thomsonreuters.com.uat',
@@ -150,11 +154,13 @@ async function takeScreenshot(page, name) {
 }
 
 /**
- * Main test function
+ * Run a single iteration of the test
  */
-async function main() {
-  const startTime = Date.now();
-  console.log('🚀 Starting Sureprep UI Approval Test');
+async function runIteration(iterationNumber) {
+  const iterationStart = Date.now();
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`🔄 Iteration ${iterationNumber}/${config.iterations}`);
+  console.log(`${'='.repeat(60)}\n`);
   
   let browser;
   let page;
@@ -315,30 +321,97 @@ async function main() {
     await takeScreenshot(page, 'products_added');
     console.log('✅ Products configured successfully');
     
-    // Test completed successfully
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`\n✅ Test completed successfully in ${duration}s`);
-    console.log(`Account: ${config.accountName}`);
-    console.log(`Contact: ${config.contactFirstName} ${config.contactLastName}`);
-    console.log(`Opportunity: ${config.opportunityName}`);
+    // Iteration completed successfully
+    const duration = ((Date.now() - iterationStart) / 1000).toFixed(2);
+    console.log(`\n✅ Iteration ${iterationNumber} completed in ${duration}s`);
+    console.log(`   Account: ${config.accountName}`);
+    console.log(`   Contact: ${config.contactFirstName} ${config.contactLastName}`);
+    console.log(`   Opportunity: ${config.opportunityName}`);
     
-    process.exit(0);
+    return {
+      success: true,
+      iteration: iterationNumber,
+      duration: parseFloat(duration),
+      timestamp: new Date().toISOString()
+    };
     
   } catch (error) {
-    console.error(`\n❌ Test failed: ${error.message}`);
+    console.error(`\n❌ Iteration ${iterationNumber} failed: ${error.message}`);
     console.error(error.stack);
     
     if (page) {
-      await takeScreenshot(page, 'error');
+      await takeScreenshot(page, `error_iteration_${iterationNumber}`);
     }
     
-    process.exit(1);
+    return {
+      success: false,
+      iteration: iterationNumber,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    };
     
   } finally {
     if (browser) {
       await browser.close();
     }
   }
+}
+
+/**
+ * Main test function - runs all iterations
+ */
+async function main() {
+  const testStart = Date.now();
+  console.log('🚀 Starting Sureprep UI Approval Test');
+  console.log(`📊 Configuration:`);
+  console.log(`   - Iterations: ${config.iterations}`);
+  console.log(`   - Think Time: ${config.thinkTime}ms`);
+  console.log(`   - Environment: ${config.loginUrl}`);
+  
+  const results = [];
+  let successCount = 0;
+  let failureCount = 0;
+  
+  // Run iterations sequentially (browser tests don't scale well in parallel)
+  for (let i = 1; i <= config.iterations; i++) {
+    const result = await runIteration(i);
+    results.push(result);
+    
+    if (result.success) {
+      successCount++;
+    } else {
+      failureCount++;
+    }
+    
+    // Think time between iterations (except after last one)
+    if (i < config.iterations) {
+      console.log(`\n⏸️  Waiting ${config.thinkTime}ms before next iteration...`);
+      await new Promise(resolve => setTimeout(resolve, config.thinkTime));
+    }
+  }
+  
+  // Print summary
+  const totalDuration = ((Date.now() - testStart) / 1000).toFixed(2);
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`📊 TEST SUMMARY`);
+  console.log(`${'='.repeat(60)}`);
+  console.log(`Total Iterations: ${config.iterations}`);
+  console.log(`Successful: ${successCount} ✅`);
+  console.log(`Failed: ${failureCount} ❌`);
+  console.log(`Success Rate: ${((successCount / config.iterations) * 100).toFixed(1)}%`);
+  console.log(`Total Duration: ${totalDuration}s`);
+  
+  if (successCount > 0) {
+    const avgDuration = results
+      .filter(r => r.success)
+      .reduce((sum, r) => sum + r.duration, 0) / successCount;
+    console.log(`Avg Duration: ${avgDuration.toFixed(2)}s per iteration`);
+  }
+  
+  console.log(`${'='.repeat(60)}\n`);
+  
+  // Exit with appropriate code
+  process.exit(failureCount > 0 ? 1 : 0);
 }
 
 // Run the test
