@@ -9,6 +9,9 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import { Construct } from 'constructs';
 import { config } from '../environments/config';
 import * as path from 'path';
@@ -61,6 +64,50 @@ export class JMeterEcsStack extends cdk.Stack {
         }],
       }],
     });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SNS TOPIC FOR TEST SCRIPT VALIDATION NOTIFICATIONS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const validationTopic = new sns.Topic(this, 'TestValidationTopic', {
+      displayName: 'Test Script Validation Notifications',
+      topicName: 'test-script-validation',
+    });
+
+    // Subscribe team email - update this with your actual email
+    // Note: You'll need to confirm the subscription via email after deployment
+    validationTopic.addSubscription(
+      new subscriptions.EmailSubscription('test-team@company.com')
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAMBDA FUNCTION FOR TEST SCRIPT VALIDATION
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const validateTestScriptFn = new lambda.Function(this, 'ValidateTestScript', {
+      functionName: 'jmeter-validate-test-script',
+      runtime: lambda.Runtime.NODEJS_18_X,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'validate-test-script')),
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        SNS_TOPIC_ARN: validationTopic.topicArn,
+      },
+      description: 'Validates test scripts uploaded to S3 for security and best practices',
+    });
+
+    // Grant permissions to Lambda validator
+    configBucket.grantReadWrite(validateTestScriptFn);
+    validationTopic.grantPublish(validateTestScriptFn);
+
+    // S3 trigger - validates JavaScript test scripts on upload
+    configBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(validateTestScriptFn),
+      { prefix: 'tests/', suffix: '.js' }
+    );
 
     // ═══════════════════════════════════════════════════════════════════════
     // ECR REPOSITORY
@@ -585,6 +632,18 @@ export class JMeterEcsStack extends cdk.Stack {
       value: browserTaskDefinition.taskDefinitionArn,
       description: 'ECS Browser task definition ARN (4 vCPU / 8 GB)',
       exportName: 'JMeterEcs-BrowserTaskDefinitionArn',
+    });
+
+    new cdk.CfnOutput(this, 'ValidationTopicArn', {
+      value: validationTopic.topicArn,
+      description: 'SNS topic for test script validation notifications',
+      exportName: 'JMeterEcs-ValidationTopicArn',
+    });
+
+    new cdk.CfnOutput(this, 'ValidatorFunctionName', {
+      value: validateTestScriptFn.functionName,
+      description: 'Lambda function that validates test scripts',
+      exportName: 'JMeterEcs-ValidatorFunctionName',
     });
   }
 }
