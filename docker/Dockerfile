@@ -33,9 +33,13 @@ RUN apk add --no-cache \
     # Additional utilities
     dbus \
     udev \
+    # Build dependencies for Python packages
+    gcc \
+    musl-dev \
+    python3-dev \
+    libffi-dev \
     && pip3 install --break-system-packages --no-cache-dir awscli \
-    && pip3 install --break-system-packages --no-cache-dir datadog \
-    && pip3 install --break-system-packages --no-cache-dir playwright==1.40.0
+    && pip3 install --break-system-packages --no-cache-dir datadog
 
 # Download and install JMeter
 RUN mkdir /opt/jmeter \
@@ -143,7 +147,11 @@ RUN npm install -g playwright@1.40.0 \
     && npm install -g @aws-sdk/client-s3 \
     && echo "✅ Node.js Playwright installed"
 
-# Install Playwright browsers (Chromium - shared by Python and Node.js)
+# Install Python Playwright (using the same browsers as Node.js)
+RUN pip3 install --break-system-packages --no-cache-dir playwright==1.40.0 \
+    && echo "✅ Python Playwright installed"
+
+# Install Playwright browsers once (shared by both Python and Node.js)
 RUN playwright install chromium --with-deps \
     && echo "✅ Playwright Chromium browser installed (shared by Python & Node.js)"
 
