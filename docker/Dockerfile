@@ -189,7 +189,8 @@ RUN playwright install chromium \
 RUN google-chrome --version \
     && chromedriver --version \
     && echo "✅ Google Chrome and ChromeDriver verified" \
-    && node -e "const { chromium } = require('playwright'); console.log('✅ Playwright verified with bundled Chromium');"
+    && playwright --version \
+    && echo "✅ Playwright verified with bundled Chromium"
 
 # Copy Datadog forwarder script
 COPY datadog-forwarder.py /usr/local/bin/datadog-forwarder.py
