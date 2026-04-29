@@ -11,6 +11,8 @@ const { runParallelTest, timedAction } = require('../lib/test-runner');
 const config = {
   parallelUsers: parseInt(process.env.PARALLEL_USERS || '3'),
   iterations: parseInt(process.env.ITERATIONS || '2'),
+  rampUpTime: parseInt(process.env.RAMP_UP_TIME || '60'), // seconds - gradually start users (like JMeter ramp-up)
+  thinkTime: parseInt(process.env.THINK_TIME || '2000'), // ms - delay between iterations
   consumerKey: process.env.CONSUMER_KEY || '3MVG9snQZy6aQDh0Mi6xuTbD1.hKJD6MKrlqsV.vYW5ma0Uj.1tzbHhVpWdqimgfxZePCx88IiYfxL.IcDdzG',
   username: process.env.USERNAME || 'rambabu.chitteti@thomsonreuters.com.uat',
   loginUrl: process.env.LOGIN_URL || 'https://test.salesforce.com',
