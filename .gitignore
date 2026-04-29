@@ -1,6 +1,6 @@
-# JMeter Test Files (data files stored in S3, not GitHub)
-# Test scripts (.jmx, .js, .py) ARE committed to GitHub for version control
-# Only ignore test data files
+# JMeter Test Files (stored in S3, not GitHub)
+# Ignore entire tests directory - test files should be uploaded to S3, not committed to GitHub
+tests/
 data/*.csv
 data/*.txt
 

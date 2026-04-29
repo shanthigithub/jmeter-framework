@@ -14,6 +14,18 @@ This project deliberately avoids markdown documentation files. All documentation
 ### Exception
 Only create markdown files if the user explicitly requests it with clear confirmation.
 
+### NEVER Upload tests/ Folder to GitHub
+- Do NOT commit or push any files in the tests/ directory
+- Do NOT remove tests/ from .gitignore
+- tests/ folder should ONLY exist locally, NEVER in GitHub
+- Test files are meant to be uploaded to S3, not version controlled
+
+### Reason
+Test files contain sensitive test data and credentials. They should be stored in S3, not in the Git repository.
+
+### Exception
+Only if the user explicitly requests to commit test files with clear confirmation.
+
 ## Communication Guidelines
 - When completing tasks, provide results directly without creating summary .md files
 - Use inline responses instead of documentation files
