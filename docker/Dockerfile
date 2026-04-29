@@ -9,17 +9,21 @@ ENV DEBIAN_FRONTEND=noninteractive
 # JMeter version
 ARG JMETER_VERSION=5.6.3
 
-# Install Node.js 18 LTS (Playwright requires Node.js 14+) and other dependencies
-# NodeSource setup and package install must be in same RUN command
+# First install curl (needed for NodeSource setup)
+RUN apt-get update && apt-get install -y curl ca-certificates
+
+# Install Node.js 18 LTS (Playwright requires Node.js 14+)
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get update && apt-get install -y \
+    && apt-get install -y nodejs \
+    && node --version && npm --version
+
+# Install remaining dependencies
+RUN apt-get update && apt-get install -y \
     # Java for JMeter
     openjdk-17-jre \
     # Utilities
-    curl \
     wget \
     bash \
-    ca-certificates \
     # Python and pip
     python3 \
     python3-pip \
