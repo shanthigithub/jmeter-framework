@@ -1,45 +1,51 @@
 # JMeter Batch Docker Image
-# Lightweight, optimized for AWS Batch with S3 dynamic loading
+# Debian-based for Playwright compatibility, optimized for AWS Batch with S3 dynamic loading
 
-FROM alpine:3.19
+FROM ubuntu:22.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
 
 # JMeter version
 ARG JMETER_VERSION=5.6.3
 
 # Install dependencies including Datadog agent and browser support
-RUN apk add --no-cache \
-    openjdk17-jre \
+RUN apt-get update && apt-get install -y \
+    # Java for JMeter
+    openjdk-17-jre \
+    # Utilities
     curl \
+    wget \
     bash \
+    ca-certificates \
+    # Python and pip
     python3 \
-    py3-pip \
-    # Node.js for JavaScript Playwright (k6-compatible API!)
+    python3-pip \
+    # Node.js and npm for Playwright
     nodejs \
     npm \
     # Browser and WebDriver support
-    chromium \
+    chromium-browser \
     chromium-chromedriver \
     # X11 virtual framebuffer for headless browser execution
     xvfb \
-    xvfb-run \
     # Fonts and rendering dependencies
-    ttf-freefont \
-    font-noto-emoji \
+    fonts-liberation \
+    fonts-noto-color-emoji \
     # Graphics libraries required by Chromium
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
+    libnss3 \
+    libfreetype6 \
+    libharfbuzz0b \
     # Additional utilities
     dbus \
     udev \
     # Build dependencies for Python packages
     gcc \
-    musl-dev \
     python3-dev \
     libffi-dev \
-    && pip3 install --break-system-packages --no-cache-dir awscli \
-    && pip3 install --break-system-packages --no-cache-dir datadog
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir awscli \
+    && pip3 install --no-cache-dir datadog
 
 # Download and install JMeter
 RUN mkdir /opt/jmeter \
