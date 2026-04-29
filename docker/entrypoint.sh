@@ -191,7 +191,30 @@ echo ""
 
 # Download test script (required)
 echo "📥 Downloading test script..."
-if ! download_s3_file "$TEST_SCRIPT_S3" "/tmp/test.jmx"; then
+
+# Detect file extension from TEST_SCRIPT_S3
+FILE_EXTENSION="${TEST_SCRIPT_S3##*.}"
+echo "🔍 Detected file extension: .${FILE_EXTENSION}"
+
+# Download to appropriate location based on extension
+if [ "$FILE_EXTENSION" = "jmx" ]; then
+    TEST_FILE="/tmp/test.jmx"
+elif [ "$FILE_EXTENSION" = "py" ]; then
+    TEST_FILE="/tmp/test.py"
+elif [ "$FILE_EXTENSION" = "js" ]; then
+    TEST_FILE="/tmp/test.js"
+else
+    echo "❌ [ERROR] Unsupported file extension: .${FILE_EXTENSION}"
+    echo "   Supported extensions:"
+    echo "   - .jmx (JMeter - API tests, JSR223 browser tests)"
+    echo "   - .py  (Python Playwright - browser tests)"
+    echo "   - .js  (JavaScript Playwright - k6-ready browser tests!)"
+    exit 1
+fi
+
+echo "📂 Test file will be saved to: ${TEST_FILE}"
+
+if ! download_s3_file "$TEST_SCRIPT_S3" "$TEST_FILE"; then
     echo ""
     echo "❌ [FATAL] Failed to download test script"
     echo "Cannot proceed without test plan. Exiting..."
@@ -298,18 +321,56 @@ else
 fi
 echo ""
 
-# Run JMeter
+# Route to appropriate test runner based on file extension
 echo "=========================================="
-# Verify JMeter binary exists
-if command -v jmeter >/dev/null 2>&1; then
-    echo "[INFO] JMeter binary: $(which jmeter)"
-    jmeter --version 2>&1 | head -3 || echo "  (version check failed)"
-else
-    echo "❌ [ERROR] JMeter binary not found in PATH!"
-    echo "[DEBUG] PATH=$PATH"
-    exit 1
+if [ "$FILE_EXTENSION" = "jmx" ]; then
+    echo "[RUN] JMeter Test Runner Selected"
+    echo "=========================================="
+    
+    # Verify JMeter binary exists
+    if command -v jmeter >/dev/null 2>&1; then
+        echo "[INFO] JMeter binary: $(which jmeter)"
+        jmeter --version 2>&1 | head -3 || echo "  (version check failed)"
+    else
+        echo "❌ [ERROR] JMeter binary not found in PATH!"
+        echo "[DEBUG] PATH=$PATH"
+        exit 1
+    fi
+    echo ""
+    
+elif [ "$FILE_EXTENSION" = "py" ]; then
+    echo "[RUN] Python Playwright Test Runner Selected"
+    echo "=========================================="
+    
+    # Verify Python and Playwright exist
+    if command -v python3 >/dev/null 2>&1; then
+        echo "[INFO] Python: $(which python3)"
+        python3 --version
+        echo "[INFO] Playwright: $(python3 -c 'import playwright; print(playwright.__version__)')"
+    else
+        echo "❌ [ERROR] Python3 not found!"
+        echo "[DEBUG] PATH=$PATH"
+        exit 1
+    fi
+    echo ""
+    
+elif [ "$FILE_EXTENSION" = "js" ]; then
+    echo "[RUN] JavaScript Playwright Test Runner Selected (k6-ready!)"
+    echo "=========================================="
+    
+    # Verify Node.js and Playwright exist
+    if command -v node >/dev/null 2>&1; then
+        echo "[INFO] Node.js: $(which node)"
+        node --version
+        echo "[INFO] npm: $(npm --version)"
+        echo "[INFO] Playwright: $(node -e "console.log(require('playwright').version)")"
+    else
+        echo "❌ [ERROR] Node.js not found!"
+        echo "[DEBUG] PATH=$PATH"
+        exit 1
+    fi
+    echo ""
 fi
-echo ""
 
 # Start Datadog forwarder in background (if enabled)
 FORWARDER_PID=""
@@ -377,17 +438,62 @@ echo "Timeout Buffer: ${TIMEOUT_BUFFER}s ($(($TIMEOUT_BUFFER / 60))m)"
 echo "Maximum Task Runtime: ${TASK_TIMEOUT}s ($(($TASK_TIMEOUT / 60))m)"
 echo ""
 
-# Execute JMeter command with timeout protection
+# Execute test with timeout protection (route based on file extension)
 echo "=========================================="
-echo "[RUN] Running JMeter Test (with timeout protection)"
-echo "=========================================="
-echo "[COMMAND] timeout ${TASK_TIMEOUT} $@"
-echo ""
-
-# BusyBox timeout syntax: timeout SECONDS COMMAND (no -t flag needed)
-# Exit codes: 0 = success, 124 = timeout, others = JMeter error
-timeout ${TASK_TIMEOUT} "$@" 2>&1
-JMETER_RAW_EXIT=$?
+if [ "$FILE_EXTENSION" = "jmx" ]; then
+    echo "[RUN] Running JMeter Test (with timeout protection)"
+    echo "=========================================="
+    echo "[COMMAND] timeout ${TASK_TIMEOUT} $@"
+    echo ""
+    
+    # BusyBox timeout syntax: timeout SECONDS COMMAND (no -t flag needed)
+    # Exit codes: 0 = success, 124 = timeout, others = JMeter error
+    timeout ${TASK_TIMEOUT} "$@" 2>&1
+    JMETER_RAW_EXIT=$?
+    
+elif [ "$FILE_EXTENSION" = "py" ]; then
+    echo "[RUN] Running Playwright Test (with timeout protection)"
+    echo "=========================================="
+    echo "[COMMAND] timeout ${TASK_TIMEOUT} python3 ${TEST_FILE}"
+    echo ""
+    echo "ℹ️  [INFO] JMeter JVM will NOT start (Playwright runs directly)"
+    echo "ℹ️  [INFO] Memory saved: ~512 MB (no JMeter overhead)"
+    echo ""
+    
+    # Export environment variables for Python script
+    export CONFIG_BUCKET
+    export RESULTS_BUCKET
+    export TEST_ID
+    export RUN_ID
+    export CONTAINER_ID
+    export RESULTS_PREFIX
+    
+    # Run Python script with timeout
+    timeout ${TASK_TIMEOUT} python3 "${TEST_FILE}" 2>&1
+    JMETER_RAW_EXIT=$?
+    
+elif [ "$FILE_EXTENSION" = "js" ]; then
+    echo "[RUN] Running JavaScript Playwright Test (with timeout protection)"
+    echo "=========================================="
+    echo "[COMMAND] timeout ${TASK_TIMEOUT} node ${TEST_FILE}"
+    echo ""
+    echo "ℹ️  [INFO] JMeter JVM will NOT start (Playwright runs directly)"
+    echo "ℹ️  [INFO] Memory saved: ~512 MB (no JMeter overhead)"
+    echo "ℹ️  [INFO] k6-compatible API! Easy migration to k6 later!"
+    echo ""
+    
+    # Export environment variables for Node.js script
+    export CONFIG_BUCKET
+    export RESULTS_BUCKET
+    export TEST_ID
+    export RUN_ID
+    export CONTAINER_ID
+    export RESULTS_PREFIX
+    
+    # Run Node.js script with timeout
+    timeout ${TASK_TIMEOUT} node "${TEST_FILE}" 2>&1
+    JMETER_RAW_EXIT=$?
+fi
 
 echo ""
 

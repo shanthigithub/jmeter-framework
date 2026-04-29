@@ -13,6 +13,9 @@ RUN apk add --no-cache \
     bash \
     python3 \
     py3-pip \
+    # Node.js for JavaScript Playwright (k6-compatible API!)
+    nodejs \
+    npm \
     # Browser and WebDriver support
     chromium \
     chromium-chromedriver \
@@ -31,7 +34,8 @@ RUN apk add --no-cache \
     dbus \
     udev \
     && pip3 install --break-system-packages --no-cache-dir awscli \
-    && pip3 install --break-system-packages --no-cache-dir datadog
+    && pip3 install --break-system-packages --no-cache-dir datadog \
+    && pip3 install --break-system-packages --no-cache-dir playwright==1.40.0
 
 # Download and install JMeter
 RUN mkdir /opt/jmeter \
@@ -134,9 +138,20 @@ RUN cd ${JMETER_HOME}/lib \
     && curl -fSL --retry 3 https://repo1.maven.org/maven2/org/reactivestreams/reactive-streams/1.0.4/reactive-streams-1.0.4.jar -o reactive-streams-1.0.4.jar \
     && echo "✅ Selenium WebDriver with all dependencies installed (40+ JARs)"
 
-# Verify browser installation
+# Install Node.js Playwright package (k6-compatible API!)
+RUN npm install -g playwright@1.40.0 \
+    && npm install -g @aws-sdk/client-s3 \
+    && echo "✅ Node.js Playwright installed"
+
+# Install Playwright browsers (Chromium - shared by Python and Node.js)
+RUN playwright install chromium --with-deps \
+    && echo "✅ Playwright Chromium browser installed (shared by Python & Node.js)"
+
+# Verify all browser installations
 RUN chromium-browser --version && chromedriver --version \
-    && echo "✅ Chromium and ChromeDriver installed successfully"
+    && echo "✅ Chromium and ChromeDriver installed successfully" \
+    && python3 -c "from playwright.sync_api import sync_playwright; print('✅ Python Playwright verified')" \
+    && node -e "const { chromium } = require('playwright'); console.log('✅ Node.js Playwright verified');"
 
 # Copy Datadog forwarder script
 COPY datadog-forwarder.py /usr/local/bin/datadog-forwarder.py
