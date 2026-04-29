@@ -615,7 +615,8 @@ echo ""
 uploaded_count=0
 failed_count=0
 
-for file in /tmp/*.jtl /tmp/*.log /tmp/*.csv; do
+# Upload all result files including screenshots
+for file in /tmp/*.jtl /tmp/*.log /tmp/*.csv /tmp/*.png /jmeter/results/*.png; do
     if [ -f "$file" ]; then
         filename=$(basename "$file")
         # Upload to container-specific folder
