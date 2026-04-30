@@ -19,7 +19,7 @@ on:
     # -------------------------
     
     # Daily at 2 AM UTC (7:30 AM IST)
-    - cron: '0 2 * * *'
+    # - cron: '0 2 * * *'
     
     # AVAILABLE SCHEDULE PATTERNS (uncomment to enable):
     # --------------------------------------------------
