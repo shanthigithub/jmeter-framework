@@ -78,7 +78,7 @@ on:
 env:
   AWS_REGION: us-east-1
   # Config file to use for scheduled runs (when triggered by cron)
-  SCHEDULED_CONFIG: 'dcp-api-test.json'
+  SCHEDULED_CONFIG: 'dcp-api-test-00000000000000000000000000000000000.json'
 
 jobs:
   run-scheduled-test:
