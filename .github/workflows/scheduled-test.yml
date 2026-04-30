@@ -64,10 +64,8 @@ on:
         default: 'config/nightly-test.json'
         type: choice
         options:
-          - 'config/nightly-test.json'
-          - 'config/sureprep-ui-approval-test.json'
-          - 'config/dcp-api-test.json'
-          - 'config/test-suite.json'
+          - 'sureprep-ui-approval-test.json'
+          - 'dcp-api-test.json'
       enable_datadog_metrics:
         description: 'Send metrics to Datadog?'
         required: true
