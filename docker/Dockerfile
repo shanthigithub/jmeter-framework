@@ -47,8 +47,9 @@ RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}') \
 
 # Install remaining dependencies
 RUN apt-get update && apt-get install -y \
-    # Java for JMeter
-    openjdk-17-jre \
+    # Java for JMeter and TestNG (JDK needed for Maven)
+    openjdk-17-jdk \
+    maven \
     # Python and pip
     python3 \
     python3-pip \
@@ -223,6 +224,18 @@ RUN cd /jmeter && npm init -y \
     && npm install playwright@1.40.0 \
     && npm install @aws-sdk/client-s3 \
     && echo "✅ Playwright installed locally in /jmeter for test scripts"
+
+# Copy Java/TestNG framework files
+COPY java/pom.xml /jmeter/java/pom.xml
+COPY java/testng.xml /jmeter/java/testng.xml
+COPY java/src /jmeter/java/src
+COPY java/docker-compose.healenium.yml /jmeter/java/docker-compose.healenium.yml
+
+# Pre-download Maven dependencies (creates a cache layer for faster rebuilds)
+RUN cd /jmeter/java \
+    && mvn dependency:go-offline -B \
+    && echo "✅ Maven dependencies pre-downloaded" \
+    || echo "⚠️ Some dependencies may need to be downloaded at runtime"
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /entrypoint.sh

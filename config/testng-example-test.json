@@ -1,0 +1,10 @@
+{
+  "testSuite": [
+    {
+      "testId": "example-testng-test",
+      "testType": "browser",
+      "testScript": "tests/ExampleTest.java",
+      "execute": true
+    }
+  ]
+}

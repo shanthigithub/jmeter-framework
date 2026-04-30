@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="TestNG Performance Suite" parallel="methods" thread-count="10" verbose="1">
+    
+    <!-- 
+        Parallel execution configuration:
+        - parallel="methods" : Each @Test method runs in parallel
+        - thread-count="10" : Default 10 parallel users (can be overridden via Maven -DthreadCount=X)
+        - verbose="1" : Logging level (1-10, higher = more verbose)
+    -->
+    
+    <listeners>
+        <!-- Allure reporting listener -->
+        <listener class-name="io.qameta.allure.testng.AllureTestNg"/>
+    </listeners>
+    
+    <test name="Functional Tests" preserve-order="true">
+        <classes>
+            <!-- Add test classes here - Examples: -->
+            <!-- <class name="com.testframework.tests.ExampleTest"/> -->
+        </classes>
+    </test>
+    
+</suite>

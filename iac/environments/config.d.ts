@@ -1,5 +1,5 @@
 /**
- * JMeter Batch Framework Configuration
+ * JMeter ECS Framework Configuration
  *
  * Simple, environment-agnostic configuration.
  * Personal AWS account optimized for cost and performance.
@@ -9,16 +9,14 @@ export declare const config: {
     configBucket: string;
     resultsBucket: string;
     ecrRepoName: string;
-    batch: {
-        compute: {
-            type: "SPOT";
-            minvCpus: number;
-            maxvCpus: number;
-            desiredvCpus: number;
-            spotBidPercentage: number;
-            instanceTypes: string[];
+    ecs: {
+        apiTask: {
+            vcpus: number;
+            memoryMiB: number;
+            retryAttempts: number;
+            timeoutMinutes: number;
         };
-        job: {
+        browserTask: {
             vcpus: number;
             memoryMiB: number;
             retryAttempts: number;
@@ -32,8 +30,8 @@ export declare const config: {
         timeoutSeconds: {
             readConfig: number;
             partitionData: number;
-            submitJobs: number;
-            checkJobs: number;
+            submitTasks: number;
+            checkTasks: number;
             mergeResults: number;
         };
     };
@@ -51,6 +49,7 @@ export declare const config: {
     monitoring: {
         enableDatadog: boolean;
         datadogSite: string;
+        datadogSecretArn: string;
     };
 };
 /**
@@ -61,11 +60,21 @@ export declare const config: {
  *   "testSuite": [
  *     {
  *       "testId": "api-load-test",
+ *       "testType": "api",
  *       "testScript": "tests/api-load.jmx",
  *       "numOfContainers": 3,
  *       "threads": 100,
  *       "duration": "15m",
  *       "dataFiles": ["data/users.csv", "data/products.csv"],
+ *       "execute": true
+ *     },
+ *     {
+ *       "testId": "browser-selenium-test",
+ *       "testType": "browser",
+ *       "testScript": "tests/browser/ui-flow.jmx",
+ *       "numOfContainers": 2,
+ *       "threads": 10,
+ *       "duration": "30m",
  *       "execute": true
  *     }
  *   ]
@@ -73,6 +82,7 @@ export declare const config: {
  */
 export interface TestConfig {
     testId: string;
+    testType?: 'api' | 'browser';
     testScript: string;
     numOfContainers: number;
     threads: number;

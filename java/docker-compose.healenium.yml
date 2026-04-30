@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for Healenium
+  postgres-db:
+    image: postgres:14
+    container_name: healenium-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: healenium
+      POSTGRES_USER: healenium
+      POSTGRES_PASSWORD: healenium
+    volumes:
+      - healenium-db-data:/var/lib/postgresql/data
+    networks:
+      - healenium-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healenium"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Healenium backend service
+  healenium-backend:
+    image: healenium/hlm-backend:3.4.5
+    container_name: healenium-backend
+    restart: unless-stopped
+    ports:
+      - "7878:7878"
+    environment:
+      SPRING_POSTGRES_SCHEMA: healenium
+      SPRING_POSTGRES_DB: healenium
+      SPRING_POSTGRES_HOST: postgres-db
+      SPRING_POSTGRES_PORT: 5432
+      SPRING_POSTGRES_USER: healenium
+      SPRING_POSTGRES_PASSWORD: healenium
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/healenium?currentSchema=healenium
+      HLM_LOG_LEVEL: INFO
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - healenium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/healenium/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Healenium selector server (optional - for UI to view healings)
+  healenium-selector-imitator:
+    image: healenium/hlm-selector-imitator:1.2
+    container_name: healenium-selector
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      HLM_BACKEND_URL: http://healenium-backend:7878
+    depends_on:
+      healenium-backend:
+        condition: service_healthy
+    networks:
+      - healenium-network
+
+volumes:
+  healenium-db-data:
+    driver: local
+
+networks:
+  healenium-network:
+    driver: bridge

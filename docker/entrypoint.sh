@@ -203,12 +203,16 @@ elif [ "$FILE_EXTENSION" = "py" ]; then
     TEST_FILE="/tmp/test.py"
 elif [ "$FILE_EXTENSION" = "js" ]; then
     TEST_FILE="/tmp/test.js"
+elif [ "$FILE_EXTENSION" = "java" ]; then
+    echo "[INFO] Test script type: Java/TestNG (Selenium + Healenium)"
+    TEST_FILE="/tmp/test.java"
 else
     echo "❌ [ERROR] Unsupported file extension: .${FILE_EXTENSION}"
     echo "   Supported extensions:"
-    echo "   - .jmx (JMeter - API tests, JSR223 browser tests)"
-    echo "   - .py  (Python Playwright - browser tests)"
-    echo "   - .js  (JavaScript Playwright - k6-ready browser tests!)"
+    echo "   - .jmx  (JMeter - API tests, JSR223 browser tests)"
+    echo "   - .py   (Python Playwright - browser tests)"
+    echo "   - .js   (JavaScript Playwright - k6-ready browser tests)"
+    echo "   - .java (Java/TestNG - Selenium with Healenium self-healing)"
     exit 1
 fi
 
@@ -393,10 +397,33 @@ elif [ "$FILE_EXTENSION" = "js" ]; then
             echo "  ❌ NOT FOUND: /lib/test-runner.js"
         fi
         
-        echo "  ℹ️  Path resolution: /tmp/test.js -> require('../lib/test-runner') -> /lib/test-runner"
+    echo "  ℹ️  Path resolution: /tmp/test.js -> require('../lib/test-runner') -> /lib/test-runner"
     else
         echo "  ⚠️  Warning: /jmeter/lib not found"
     fi
+    echo ""
+    
+elif [ "$FILE_EXTENSION" = "java" ]; then
+    echo "[RUN] Java/TestNG Test Runner Selected"
+    echo "=========================================="
+    
+    # Verify Java and Maven exist
+    if command -v java >/dev/null 2>&1 && command -v mvn >/dev/null 2>&1; then
+        echo "[INFO] Java: $(which java)"
+        java -version 2>&1 | head -1
+        echo "[INFO] Maven: $(which mvn)"
+        mvn --version 2>&1 | head -1
+    else
+        echo "❌ [ERROR] Java or Maven not found!"
+        echo "[DEBUG] PATH=$PATH"
+        exit 1
+    fi
+    
+    # Copy Java test to framework directory
+    echo "[SETUP] Preparing TestNG framework..."
+    mkdir -p /jmeter/java/src/test/java/com/testframework/tests
+    cp "${TEST_FILE}" /jmeter/java/src/test/java/com/testframework/tests/
+    echo "  ✅ Test file copied to framework"
     echo ""
 fi
 
@@ -524,6 +551,47 @@ elif [ "$FILE_EXTENSION" = "js" ]; then
     # Run Node.js script with timeout
     timeout ${TASK_TIMEOUT} node "${TEST_FILE}" 2>&1
     JMETER_RAW_EXIT=$?
+    
+elif [ "$FILE_EXTENSION" = "java" ]; then
+    echo "[RUN] Running TestNG Test (with timeout protection)"
+    echo "=========================================="
+    echo "[COMMAND] cd /jmeter/java && timeout ${TASK_TIMEOUT} mvn test"
+    echo ""
+    echo "ℹ️  [INFO] Selenium + Healenium self-healing enabled"
+    echo "ℹ️  [INFO] Parallel execution configured in testng.xml"
+    echo ""
+    
+    # Export test configuration as system properties
+    export MAVEN_OPTS="${JVM_ARGS}"
+    
+    # Export environment variables that TestConfig will read
+    export APP_BASE_URL="${APP_BASE_URL:-https://example.com}"
+    export APP_USERNAME="${APP_USERNAME:-}"
+    export APP_PASSWORD="${APP_PASSWORD:-}"
+    export PARALLEL_USERS="${PARALLEL_USERS:-10}"
+    export ITERATIONS="${ITERATIONS:-1}"
+    export THINK_TIME="${THINK_TIME:-2000}"
+    export HEALENIUM_SERVER_URL="${HEALENIUM_SERVER_URL:-http://localhost:7878}"
+    
+    # Run Maven tests with timeout
+    cd /jmeter/java
+    timeout ${TASK_TIMEOUT} mvn test \
+        -Dparallel=methods \
+        -DthreadCount=${PARALLEL_USERS} \
+        -Dapp.base.url="${APP_BASE_URL}" \
+        -Dapp.username="${APP_USERNAME}" \
+        -Dapp.password="${APP_PASSWORD}" \
+        -Diterations="${ITERATIONS}" \
+        -Dthink.time="${THINK_TIME}" \
+        -Dhealenium.server.url="${HEALENIUM_SERVER_URL}" \
+        2>&1
+    JMETER_RAW_EXIT=$?
+    
+    # Copy test results to /tmp for upload
+    if [ -d "target/surefire-reports" ]; then
+        cp target/surefire-reports/*.xml /tmp/ 2>/dev/null || true
+        echo "  ✅ Test reports copied to /tmp"
+    fi
 fi
 
 echo ""
