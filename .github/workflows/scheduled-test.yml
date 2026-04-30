@@ -1,4 +1,4 @@
-name: Scheduled JMeter Test
+name: Schedule JMeter Test
 
 on:
   # ============================================================================
@@ -61,7 +61,7 @@ on:
       test_config:
         description: 'Test configuration file to run'
         required: true
-        default: 'config/nightly-test.json'
+        default: 'sureprep-ui-approval-test.json'
         type: choice
         options:
           - 'sureprep-ui-approval-test.json'
