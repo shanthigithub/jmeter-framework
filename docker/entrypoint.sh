@@ -555,10 +555,24 @@ elif [ "$FILE_EXTENSION" = "js" ]; then
 elif [ "$FILE_EXTENSION" = "java" ]; then
     echo "[RUN] Running TestNG Test (with timeout protection)"
     echo "=========================================="
-    echo "[COMMAND] cd /jmeter/java && timeout ${TASK_TIMEOUT} mvn test"
     echo ""
     echo "ℹ️  [INFO] Selenium + Healenium self-healing enabled"
     echo "ℹ️  [INFO] Parallel execution configured in testng.xml"
+    echo ""
+    
+    # Extract class name from Java file
+    CLASS_NAME=$(grep -E "^public class" "${TEST_FILE}" | awk '{print $3}' | head -1)
+    if [ -z "$CLASS_NAME" ]; then
+        echo "❌ [ERROR] Could not extract class name from ${TEST_FILE}"
+        exit 1
+    fi
+    echo "📝 Detected test class: ${CLASS_NAME}"
+    
+    # Copy downloaded test file to Maven project structure
+    MAVEN_TEST_DIR="/jmeter/java/src/test/java/com/testframework/tests"
+    mkdir -p "${MAVEN_TEST_DIR}"
+    cp "${TEST_FILE}" "${MAVEN_TEST_DIR}/${CLASS_NAME}.java"
+    echo "✅ Copied test to: ${MAVEN_TEST_DIR}/${CLASS_NAME}.java"
     echo ""
     
     # Export test configuration as system properties
@@ -572,6 +586,9 @@ elif [ "$FILE_EXTENSION" = "java" ]; then
     export ITERATIONS="${ITERATIONS:-1}"
     export THINK_TIME="${THINK_TIME:-2000}"
     export HEALENIUM_SERVER_URL="${HEALENIUM_SERVER_URL:-http://localhost:7878}"
+    
+    echo "[COMMAND] cd /jmeter/java && timeout ${TASK_TIMEOUT} mvn test"
+    echo ""
     
     # Run Maven tests with timeout
     cd /jmeter/java
