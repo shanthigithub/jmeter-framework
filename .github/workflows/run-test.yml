@@ -13,6 +13,7 @@ on:
           - 'test-suite.json'
           - 'sureprep-ui-test.json'
           - 'sureprep-ui-test-playwright.json'
+          - 'sureprep-ui-approval-testng-test.json'
           - 'sureprep-dcp-ui-api-test.json'
       enable_datadog_metrics:
         description: '2. Send metrics to Datadog?'
