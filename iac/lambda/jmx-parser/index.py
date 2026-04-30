@@ -69,8 +69,8 @@ def lambda_handler(event, context):
         file_content = response['Body'].read().decode('utf-8')
         
         # Detect file type and parse accordingly
-        if test_script.lower().endswith(('.js', '.py')):
-            # Playwright/browser test script
+        if test_script.lower().endswith(('.js', '.py', '.java')):
+            # Browser test script (Playwright JavaScript/Python or TestNG Java)
             print(f"🎭 Detected browser test script: {test_script}")
             config = parse_playwright_script(file_content, test_script, property_overrides)
         elif test_script.lower().endswith('.jmx'):
@@ -78,7 +78,7 @@ def lambda_handler(event, context):
             print(f"🔧 Detected JMeter JMX file: {test_script}")
             config = parse_jmx(file_content, property_overrides)
         else:
-            raise ValueError(f"Unsupported test script type: {test_script}. Must be .jmx, .js, or .py")
+            raise ValueError(f"Unsupported test script type: {test_script}. Must be .jmx, .js, .py, or .java")
         
         # Merge parsed config with original test metadata
         result = {
