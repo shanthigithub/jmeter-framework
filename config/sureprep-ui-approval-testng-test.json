@@ -1,0 +1,10 @@
+{
+  "testSuite": [
+    {
+      "testId": "sureprep-ui-approval-testng",
+      "testType": "browser",
+      "testScript": "tests/SureprepUIApprovalTest.java",
+      "execute": true
+    }
+  ]
+}
