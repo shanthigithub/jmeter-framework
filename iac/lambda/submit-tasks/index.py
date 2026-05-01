@@ -152,10 +152,9 @@ def lambda_handler(event, context):
                 else:
                     print(f"    ⚠️  [DEBUG-SUBMITTASKS] Datadog DISABLED - enableDatadog is False or not present")
                 
-                # Add data file S3 path if partitioned
-                if data_partitions and container_idx < len(data_partitions):
-                    data_partition = data_partitions[container_idx]
-                    environment.append({'name': 'DATA_FILE_S3', 'value': f's3://{config_bucket}/{data_partition}'})
+                # Add data file S3 path if exists (entrypoint will download and partition using offset/increment)
+                if data_file_s3:
+                    environment.append({'name': 'DATA_FILE_S3', 'value': data_file_s3})
                 
                 # Launch ECS Fargate task
                 try:
