@@ -1,6 +1,7 @@
 # JMeter Batch Docker Image
 # Debian-based for Playwright compatibility, optimized for AWS Batch with S3 dynamic loading
 # Updated: Force rebuild to ensure Playwright is installed locally in /jmeter
+# Trigger rebuild for commit efc4f18f (fix ECS image tagging)
 
 FROM ubuntu:22.04
 
