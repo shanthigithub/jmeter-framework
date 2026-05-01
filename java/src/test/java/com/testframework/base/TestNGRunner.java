@@ -1,46 +1,63 @@
 package com.testframework.base;
 
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
-import org.testng.ITestResult;
-import org.testng.annotations.*;
-import io.github.bonigarcia.wdm.WebDriverManager;
-
-import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * TestNG Runner - DO NOT EDIT (Framework Code - Same as test-runner.js)
+ * TestNG Framework Runner - Programmatic Parallel Execution ONLY
  * 
- * This is the TestNG equivalent of test-runner.js
- * Provides the same functionality for Java/TestNG tests
+ * Java equivalent of lib/test-runner.js (Playwright version)
+ * Provides ONLY programmatic parallel test execution (NO testng.xml, NO @Test annotations)
  * 
- * Features:
- * - WebDriver management with Healenium self-healing
- * - Transaction timing for each user action (like JMeter)
- * - JTL result file generation for S3 upload
- * - Screenshot capture on failure
- * - Thread-safe parallel execution
+ * Key Features:
+ * - Programmatic parallel test execution (like JMeter Thread Groups)
+ * - Transaction timing similar to JMeter Transaction Controllers
+ * - Automatic JTL result file generation
+ * - Exception propagation (NO suppression - tests fail when they should!)
+ * 
+ * Usage (Programmatic ONLY - matches Playwright exactly):
+ * 
+ *   public static void main(String[] args) {
+ *       TestResults results = TestNGRunner.runParallelTest(
+ *           (userId, iteration) -> runMyTest(userId, iteration),
+ *           parallelUsers,
+ *           iterations,
+ *           rampUpTime,
+ *           thinkTime
+ *       );
+ *       System.exit(results.totalFailures > 0 ? 1 : 0);
+ *   }
+ * 
+ *   private static void runMyTest(int userId, int iteration) throws Exception {
+ *       WebDriver driver = timedActionStatic("Step_001_Setup", () -> {
+ *           WebDriverManager.chromedriver().setup();
+ *           ChromeOptions options = new ChromeOptions();
+ *           options.addArguments("--headless");
+ *           return new ChromeDriver(options);
+ *       });
+ *       
+ *       try {
+ *           timedActionStatic("Step_002_Login", () -> {
+ *               driver.get("https://example.com");
+ *               // Login logic - exceptions propagate automatically!
+ *           });
+ *       } finally {
+ *           driver.quit();
+ *       }
+ *   }
  */
-public abstract class TestNGRunner {
+public class TestNGRunner {
     
-    // Thread-local WebDriver for parallel execution
-    private static ThreadLocal<WebDriver> driver = new ThreadLocal<>();
-    
-    // Transaction storage (like global.jmeterTransactions in test-runner.js)
-    private static Map<String, List<TransactionData>> transactions = new ConcurrentHashMap<>();
-    private static AtomicInteger totalExecutions = new AtomicInteger(0);
-    private static AtomicInteger totalSuccesses = new AtomicInteger(0);
-    private static AtomicInteger totalFailures = new AtomicInteger(0);
+    // ============================================================
+    // STATIC FIELDS (for programmatic execution)
+    // ============================================================
+    private static final Map<String, List<TransactionData>> transactions = new ConcurrentHashMap<>();
+    private static final AtomicInteger totalExecutions = new AtomicInteger(0);
+    private static final AtomicInteger totalSuccesses = new AtomicInteger(0);
+    private static final AtomicInteger totalFailures = new AtomicInteger(0);
     
     /**
      * Transaction data structure (like test-runner.js)
@@ -61,336 +78,272 @@ public abstract class TestNGRunner {
         }
     }
     
-    /**
-     * Setup WebDriver before each test method
-     */
-    @BeforeMethod(alwaysRun = true)
-    public void setUp() {
-        String threadName = Thread.currentThread().getName();
-        System.out.println("\n" + "=".repeat(60));
-        System.out.println("👤 " + threadName + " STARTING");
-        System.out.println("=".repeat(60));
-        
-        // Initialize transaction storage for this thread
-        transactions.putIfAbsent(threadName, new ArrayList<>());
-        
-        // Setup ChromeDriver
-        WebDriverManager.chromedriver().setup();
-        
-        ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless");
-        options.addArguments("--no-sandbox");
-        options.addArguments("--disable-dev-shm-usage");
-        options.addArguments("--disable-gpu");
-        options.addArguments("--window-size=1920,1080");
-        
-        // Healenium configuration
-        options.setCapability("healenium:serverUrl", "http://localhost:7878");
-        options.setCapability("healenium:recoveryTries", 3);
-        options.setCapability("healenium:scoreCapThreshold", 0.5);
-        
-        WebDriver webDriver = new ChromeDriver(options);
-        driver.set(webDriver);
-        
-        System.out.println("✅ WebDriver initialized for " + threadName);
-    }
+    // ============================================================
+    // STATIC METHODS (Programmatic Execution - Like Playwright)
+    // ============================================================
     
     /**
-     * Cleanup after each test method
+     * Execute a timed action (static version for programmatic execution)
+     * Automatically tracks timing and stores transaction data
+     * IMPORTANT: Exceptions are propagated (NOT suppressed) - this is correct behavior!
+     * 
+     * @param actionName Name of the action (e.g., "Step_001_Login")
+     * @param action Action to execute
      */
-    @AfterMethod(alwaysRun = true)
-    public void tearDown(ITestResult result) {
+    public static void timedActionStatic(String actionName, Runnable action) {
         String threadName = Thread.currentThread().getName();
+        long startTime = System.currentTimeMillis();
         
-        // Record test result
-        if (result.isSuccess()) {
-            totalSuccesses.incrementAndGet();
-            System.out.println("\n✅ Test PASSED: " + result.getName());
-        } else {
-            totalFailures.incrementAndGet();
-            System.out.println("\n❌ Test FAILED: " + result.getName());
+        try {
+            action.run();
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
             
-            // Take screenshot on failure
-            captureScreenshot(result.getName());
+            storeTransaction(actionName, startTime, duration, true, null);
+            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
+            
+        } catch (Exception e) {
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            storeTransaction(actionName, startTime, duration, false, e.getMessage());
+            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
+            
+            // IMPORTANT: Rethrow exception (like Playwright) - DO NOT suppress!
+            throw e;
         }
-        
-        totalExecutions.incrementAndGet();
-        
-        // Close WebDriver
-        WebDriver webDriver = driver.get();
-        if (webDriver != null) {
-            webDriver.quit();
-            driver.remove();
-        }
-        
-        System.out.println("\n" + "=".repeat(60));
-        System.out.println("👤 " + threadName + " COMPLETED");
-        System.out.println("=".repeat(60) + "\n");
     }
     
     /**
-     * Generate JTL result file after all tests complete
+     * Execute a timed action that returns a value (static version)
+     * IMPORTANT: Exceptions are propagated (NOT suppressed)
+     * 
+     * @param actionName Name of the action
+     * @param action Supplier lambda that returns a value
+     * @return The result from the supplier
      */
-    @AfterSuite(alwaysRun = true)
-    public void generateResults() {
+    public static <T> T timedActionStatic(String actionName, java.util.function.Supplier<T> action) {
+        String threadName = Thread.currentThread().getName();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            T result = action.get();
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            storeTransaction(actionName, startTime, duration, true, null);
+            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
+            
+            return result;
+            
+        } catch (Exception e) {
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            storeTransaction(actionName, startTime, duration, false, e.getMessage());
+            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
+            
+            // IMPORTANT: Rethrow exception (like Playwright) - DO NOT suppress!
+            throw e;
+        }
+    }
+    
+    /**
+     * User test function interface (like Playwright's testFunction parameter)
+     */
+    @FunctionalInterface
+    public interface UserTestFunction {
+        void run(int userId, int iteration) throws Exception;
+    }
+    
+    /**
+     * Run parallel test execution (like Playwright's runParallelTest())
+     * This is the Java equivalent of runParallelTest() in lib/test-runner.js
+     * 
+     * @param testFunction Function to execute for each user/iteration
+     * @param parallelUsers Number of parallel users
+     * @param iterations Iterations per user
+     * @param rampUpTime Ramp-up time in seconds
+     * @param thinkTime Think time between iterations in milliseconds
+     * @return TestResults with summary statistics
+     */
+    public static TestResults runParallelTest(
+            UserTestFunction testFunction,
+            int parallelUsers,
+            int iterations,
+            int rampUpTime,
+            int thinkTime) {
+        
+        System.out.println("\n🚀 Starting Parallel Test");
+        System.out.println("📊 Configuration:");
+        System.out.println("   - Parallel Users: " + parallelUsers);
+        System.out.println("   - Iterations per User: " + iterations);
+        System.out.println("   - Think Time: " + thinkTime + "ms");
+        System.out.println("   - Total Executions: " + (parallelUsers * iterations));
+        
+        long delayBetweenUsers = 0;
+        if (rampUpTime > 0 && parallelUsers > 1) {
+            delayBetweenUsers = (long)((rampUpTime * 1000.0) / (parallelUsers - 1));
+            System.out.println("   - Ramp-Up Time: " + rampUpTime + "s (" + delayBetweenUsers + "ms between user starts)");
+        }
+        
+        System.out.println("\n🚀 Launching " + parallelUsers + " parallel users" + 
+            (rampUpTime > 0 ? " with ramp-up" : "") + "...\n");
+        
+        long testStart = System.currentTimeMillis();
+        ExecutorService executor = Executors.newFixedThreadPool(parallelUsers);
+        List<Future<?>> futures = new ArrayList<>();
+        
+        // Launch users with optional ramp-up delay
+        for (int userId = 1; userId <= parallelUsers; userId++) {
+            final int user = userId;
+            final long delay = (userId > 1 && delayBetweenUsers > 0) ? delayBetweenUsers : 0;
+            
+            futures.add(executor.submit(() -> {
+                try {
+                    // Apply ramp-up delay
+                    if (delay > 0) {
+                        System.out.println("⏱️  Ramp-up: Starting User " + user + " after " + delay + "ms delay...");
+                        Thread.sleep(delay);
+                    }
+                    
+                    String threadName = "User " + user;
+                    System.out.println("\n" + "=".repeat(60));
+                    System.out.println("👤 " + threadName + " STARTING");
+                    System.out.println("=".repeat(60));
+                    
+                    // Initialize transaction storage for this user
+                    transactions.putIfAbsent(threadName, new ArrayList<>());
+                    
+                    // Run iterations (like Playwright)
+                    int successCount = 0;
+                    int failureCount = 0;
+                    
+                    for (int iteration = 1; iteration <= iterations; iteration++) {
+                        try {
+                            System.out.println("\n👤 User " + user + ": Starting iteration " + 
+                                iteration + "/" + iterations);
+                            
+                            // Execute test - exceptions are caught here per iteration
+                            testFunction.run(user, iteration);
+                            
+                            successCount++;
+                            totalSuccesses.incrementAndGet();
+                            System.out.println("👤 User " + user + ": Iteration " + iteration + " completed ✅");
+                            
+                            // Think time between iterations
+                            if (iteration < iterations && thinkTime > 0) {
+                                System.out.println("👤 User " + user + ": Waiting " + thinkTime + 
+                                    "ms before next iteration...");
+                                Thread.sleep(thinkTime);
+                            }
+                            
+                        } catch (Exception e) {
+                            failureCount++;
+                            totalFailures.incrementAndGet();
+                            System.err.println("❌ User " + user + ": Iteration " + iteration + 
+                                " FAILED: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    }
+                    
+                    totalExecutions.addAndGet(successCount + failureCount);
+                    
+                    System.out.println("\n" + "=".repeat(60));
+                    System.out.println("👤 " + threadName + " COMPLETED");
+                    System.out.println("   Iterations: " + iterations);
+                    System.out.println("   Successful: " + successCount + " ✅");
+                    System.out.println("   Failed: " + failureCount + " ❌");
+                    System.out.println("=".repeat(60) + "\n");
+                    
+                } catch (Exception e) {
+                    System.err.println("❌ User " + user + " FAILED: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }));
+        }
+        
+        // Wait for all users to complete
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                System.err.println("Error waiting for user: " + e.getMessage());
+            }
+        }
+        
+        executor.shutdown();
+        try {
+            executor.awaitTermination(30, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        long totalDuration = System.currentTimeMillis() - testStart;
+        
+        // Print final summary (like Playwright)
+        printFinalSummary(parallelUsers, iterations, totalDuration);
+        
+        // Generate JTL file for S3 upload (like Playwright)
+        generateJTLFile();
+        
+        return new TestResults(totalExecutions.get(), totalSuccesses.get(), 
+            totalFailures.get(), totalDuration);
+    }
+    
+    /**
+     * Print final test summary (like Playwright's final summary)
+     */
+    private static void printFinalSummary(int parallelUsers, int iterations, long totalDuration) {
         System.out.println("\n" + "=".repeat(70));
         System.out.println("📊 FINAL TEST SUMMARY");
         System.out.println("=".repeat(70));
+        System.out.println("Parallel Users: " + parallelUsers);
+        System.out.println("Iterations per User: " + iterations);
         System.out.println("Total Executions: " + totalExecutions.get());
         System.out.println("Total Successful: " + totalSuccesses.get() + " ✅");
         System.out.println("Total Failed: " + totalFailures.get() + " ❌");
         
         if (totalExecutions.get() > 0) {
             double successRate = (totalSuccesses.get() * 100.0) / totalExecutions.get();
-            System.out.println("Success Rate: " + String.format("%.1f", successRate) + "%");
+            System.out.println("Overall Success Rate: " + String.format("%.1f", successRate) + "%");
         }
         
+        System.out.println("Total Test Duration: " + (totalDuration / 1000.0) + "s");
         System.out.println("=".repeat(70) + "\n");
+    }
+    
+    /**
+     * Test results class (like Playwright's return value)
+     */
+    public static class TestResults {
+        public final int totalExecutions;
+        public final int totalSuccesses;
+        public final int totalFailures;
+        public final long totalDuration;
         
-        // Generate JTL file for S3 upload (required by entrypoint.sh)
-        generateJTLFile();
+        public TestResults(int executions, int successes, int failures, long duration) {
+            this.totalExecutions = executions;
+            this.totalSuccesses = successes;
+            this.totalFailures = failures;
+            this.totalDuration = duration;
+        }
     }
     
     /**
-     * Get WebDriver for current thread
+     * Static helper to store transaction from any thread
      */
-    protected WebDriver getDriver() {
-        return driver.get();
-    }
-    
-    /**
-     * Execute a timed action (like timedAction() in test-runner.js)
-     * Measures response time for each user action
-     * 
-     * @param actionName Name of the action (e.g., "Login", "Search")
-     * @param action Lambda to execute
-     */
-    protected void timedAction(String actionName, Runnable action) {
+    private static void storeTransaction(String actionName, long startTime, long duration, boolean success, String error) {
         String threadName = Thread.currentThread().getName();
-        long startTime = System.currentTimeMillis();
-        
-        try {
-            action.run();
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // Store transaction data
-            transactions.get(threadName).add(
-                new TransactionData(actionName, startTime, duration, true, null)
-            );
-            
-            // Log like test-runner.js
-            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
-            
-        } catch (Exception e) {
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // Store failed transaction
-            transactions.get(threadName).add(
-                new TransactionData(actionName, startTime, duration, false, e.getMessage())
-            );
-            
-            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
-            throw e;
-        }
-    }
-    
-    /**
-     * Execute a timed action that returns a value
-     * 
-     * @param actionName Name of the action
-     * @param action Supplier lambda that returns a value
-     * @return The result from the supplier
-     */
-    protected <T> T timedAction(String actionName, java.util.function.Supplier<T> action) {
-        String threadName = Thread.currentThread().getName();
-        long startTime = System.currentTimeMillis();
-        
-        try {
-            T result = action.get();
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // Store transaction data
-            transactions.get(threadName).add(
-                new TransactionData(actionName, startTime, duration, true, null)
-            );
-            
-            // Log like test-runner.js
-            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
-            
-            return result;
-            
-        } catch (Exception e) {
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // Store failed transaction
-            transactions.get(threadName).add(
-                new TransactionData(actionName, startTime, duration, false, e.getMessage())
-            );
-            
-            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
-            throw e;
-        }
-    }
-    
-    /**
-     * Functional interface that allows throwing checked exceptions
-     */
-    @FunctionalInterface
-    protected interface ThrowingRunnable {
-        void run() throws Exception;
-    }
-    
-    /**
-     * Functional interface that allows throwing checked exceptions and returns a value
-     */
-    @FunctionalInterface
-    protected interface ThrowingSupplier<T> {
-        T get() throws Exception;
-    }
-    
-    /**
-     * Execute a timed action that may throw checked exceptions
-     * Use this version when your action might throw checked exceptions
-     * 
-     * @param actionName Name of the action
-     * @param action Lambda that may throw checked exceptions
-     */
-    protected void timedActionWithException(String actionName, ThrowingRunnable action) throws Exception {
-        String threadName = Thread.currentThread().getName();
-        long startTime = System.currentTimeMillis();
-        
-        try {
-            action.run();
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // Store transaction data
-            transactions.get(threadName).add(
-                new TransactionData(actionName, startTime, duration, true, null)
-            );
-            
-            // Log like test-runner.js
-            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
-            
-        } catch (Exception e) {
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // Store failed transaction
-            transactions.get(threadName).add(
-                new TransactionData(actionName, startTime, duration, false, e.getMessage())
-            );
-            
-            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
-            throw e;
-        }
-    }
-    
-    /**
-     * Execute a timed action that returns a value and may throw checked exceptions
-     * Use this version when your action might throw checked exceptions
-     * 
-     * @param actionName Name of the action
-     * @param action Supplier lambda that may throw checked exceptions
-     * @return The result from the supplier
-     */
-    protected <T> T timedActionWithException(String actionName, ThrowingSupplier<T> action) throws Exception {
-        String threadName = Thread.currentThread().getName();
-        long startTime = System.currentTimeMillis();
-        
-        try {
-            T result = action.get();
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // Store transaction data
-            transactions.get(threadName).add(
-                new TransactionData(actionName, startTime, duration, true, null)
-            );
-            
-            // Log like test-runner.js
-            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
-            
-            return result;
-            
-        } catch (Exception e) {
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            // Store failed transaction
-            transactions.get(threadName).add(
-                new TransactionData(actionName, startTime, duration, false, e.getMessage())
-            );
-            
-            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
-            throw e;
-        }
-    }
-    
-    /**
-     * Think time (pause between actions - like JMeter)
-     */
-    protected void thinkTime(int milliseconds) {
-        try {
-            Thread.sleep(milliseconds);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-    
-    /**
-     * Log test step
-     */
-    protected void logStep(String stepNumber, String description) {
-        System.out.println(String.format("\n📋 %s: %s", stepNumber, description));
-    }
-    
-    /**
-     * Simple log method (alias for easier test writing)
-     */
-    protected void log(String message) {
-        System.out.println(message);
-    }
-    
-    /**
-     * Get environment variable with default value
-     */
-    protected static String getEnv(String name, String defaultValue) {
-        String value = System.getenv(name);
-        return (value != null && !value.isEmpty()) ? value : defaultValue;
-    }
-    
-    /**
-     * Capture screenshot on test failure
-     */
-    private void captureScreenshot(String testName) {
-        try {
-            WebDriver webDriver = driver.get();
-            if (webDriver != null) {
-                TakesScreenshot screenshot = (TakesScreenshot) webDriver;
-                File srcFile = screenshot.getScreenshotAs(OutputType.FILE);
-                
-                String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-                String fileName = String.format("screenshot_%s_%s.png", testName, timestamp);
-                File destFile = new File("/jmeter/results/" + fileName);
-                
-                Files.copy(srcFile.toPath(), destFile.toPath());
-                System.out.println("📸 Screenshot saved: " + fileName);
-            }
-        } catch (IOException e) {
-            System.err.println("⚠️  Failed to capture screenshot: " + e.getMessage());
-        }
+        transactions.putIfAbsent(threadName, new ArrayList<>());
+        transactions.get(threadName).add(new TransactionData(actionName, startTime, duration, success, error));
     }
     
     /**
      * Generate JTL result file (like generateJTLResultFile() in test-runner.js)
      * CSV format compatible with merge-results Lambda
      */
-    private void generateJTLFile() {
+    private static void generateJTLFile() {
         String jtlPath = "/tmp/results-0.jtl";
         
         System.out.println("📝 Generating JTL result file for S3 upload...");
