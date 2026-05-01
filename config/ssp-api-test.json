@@ -1,0 +1,10 @@
+{
+  "testSuite": [
+    {
+      "testId": "ssp-api-test",
+      "testType": "api",
+      "testScript": "tests/SSP_API_Add_Product_User.jmx",
+      "execute": true
+    }
+  ]
+}

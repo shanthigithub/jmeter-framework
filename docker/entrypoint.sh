@@ -247,13 +247,13 @@ if [ "$FILE_EXTENSION" = "jmx" ] && [ -f "$TEST_FILE" ]; then
     echo "=========================================="
     echo "[JMX] Rewriting CSV file paths for container"
     echo "=========================================="
-    echo "ℹ️  Converting local paths to container paths (/tmp/)"
+    echo "ℹ️  Converting local CSV paths to container paths (/tmp/)"
     echo ""
     
-    if python3 /usr/local/bin/rewrite-jmx-paths.py "$TEST_FILE"; then
+    if python3 /usr/local/bin/rewrite-jmx-csvfile-paths.py "$TEST_FILE"; then
         echo "  ✅ JMX file updated with container paths"
     else
-        echo "  ⚠️  Warning: Could not rewrite JMX paths (will try to proceed)"
+        echo "  ⚠️  Warning: Could not rewrite JMX CSV paths (will try to proceed)"
     fi
     echo ""
 fi
