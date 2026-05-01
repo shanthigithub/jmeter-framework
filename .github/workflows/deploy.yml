@@ -53,11 +53,10 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: check-changes
-    # Build if: manual trigger OR docker files changed OR workflow_dispatch with build_image=true
+    # Build if: manual trigger OR any push to main (ensures task definition always uses latest image)
     if: |
       github.event.inputs.build_image == 'true' ||
-      needs.check-changes.outputs.docker == 'true' ||
-      (github.event_name == 'push' && needs.check-changes.outputs.docker == 'true')
+      github.event_name == 'push'
     
     permissions:
       id-token: write  # Required for OIDC
