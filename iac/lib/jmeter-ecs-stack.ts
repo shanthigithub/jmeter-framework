@@ -47,6 +47,14 @@ export class JMeterEcsStack extends cdk.Stack {
         : s3.BucketEncryption.UNENCRYPTED,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [{
+        // Auto-delete temporary signal files after 1 day
+        // Signals are only needed during test execution for container synchronization
+        id: 'DeleteTemporarySignals',
+        prefix: 'signals/',
+        expiration: cdk.Duration.days(1),
+        enabled: true,
+      }],
     });
 
     const resultsBucket = new s3.Bucket(this, 'ResultsBucket', {
