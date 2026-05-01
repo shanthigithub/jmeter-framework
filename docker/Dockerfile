@@ -232,7 +232,6 @@ RUN cd /jmeter && npm init -y \
 
 # Copy Java/TestNG framework files  
 COPY java/pom.xml /jmeter/java/pom.xml
-COPY java/testng.xml /jmeter/java/testng.xml
 COPY java/src /jmeter/java/src
 COPY java/docker-compose.healenium.yml /jmeter/java/docker-compose.healenium.yml
 
