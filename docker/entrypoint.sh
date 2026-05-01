@@ -169,6 +169,18 @@ download_s3_file() {
                     echo "  [CSV HEADER] $(head -n 1 "${local_path}")"
                     echo "  [CSV INFO] File has ${line_count} lines"
                     
+                    # Print full CSV content for debugging (first 20 lines)
+                    echo "  [CSV CONTENT] First 20 lines of CSV file:"
+                    echo "  ----------------------------------------"
+                    head -n 20 "${local_path}" | while IFS= read -r line; do
+                        echo "  | $line"
+                    done
+                    echo "  ----------------------------------------"
+                    
+                    # Also show hex dump of first line to detect encoding issues
+                    echo "  [CSV HEX] First line in hexadecimal (to detect hidden characters):"
+                    head -n 1 "${local_path}" | od -A n -t x1 | head -2
+                    
                     # Check for UTF-8 BOM and remove if present
                     if [ -f "${local_path}" ]; then
                         # Check for BOM (EF BB BF in hex)
