@@ -587,8 +587,8 @@ export class JMeterEcsStack extends cdk.Stack {
       .next(filterTestsTask)
       .next(parseJmxTask)
       .next(transformParsedTests)
-      .next(partitionDataTask)
-      .next(transformPartitionedData)
+      // REMOVED: partitionDataTask - CSV partitioning now done via offset/increment in entrypoint
+      // REMOVED: transformPartitionedData - no longer needed
       .next(submitTasksTask)
       .next(waitForReadyTask)  // Synchronize containers before starting test
       .next(checkTasksTask);

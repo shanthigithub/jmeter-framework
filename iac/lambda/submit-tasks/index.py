@@ -68,7 +68,8 @@ def lambda_handler(event, context):
             threads = test['testDetails'].get('totalThreads', 0)
             # Get estimated duration for timeout protection
             estimated_duration = test['testDetails'].get('estimatedDurationSeconds', 3600)
-            data_partitions = test.get('dataPartitions', [])
+            # Get data file from test config (if exists) - no longer partitioned, entrypoint handles offset/increment
+            data_file_s3 = test.get('dataFile')  # Optional - may be None
             jvm_args = test.get('jvmArgs', '-Xms512m -Xmx2g')
             jmeter_props = test.get('jmeterProperties', {})
             
@@ -104,9 +105,8 @@ def lambda_handler(event, context):
                     '-JthreadsPerContainer', str(threads_per_container),  # Divided thread count
                 ]
                 
-                # Add data file reference if partitioned (downloaded by entrypoint)
-                if data_partitions and container_idx < len(data_partitions):
-                    command.extend(['-JdataFile', '/tmp/data.csv'])
+                # Data file download handled by entrypoint via DATA_FILE_S3 env var
+                # Partitioning handled by inject-jmx-partitioning.py using offset/increment
                 
                 # Add custom JMeter properties
                 for prop_key, prop_value in jmeter_props.items():
