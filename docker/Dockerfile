@@ -231,11 +231,18 @@ COPY java/testng.xml /jmeter/java/testng.xml
 COPY java/src /jmeter/java/src
 COPY java/docker-compose.healenium.yml /jmeter/java/docker-compose.healenium.yml
 
-# Pre-download Maven dependencies (creates a cache layer for faster rebuilds)
+# Pre-download Maven dependencies AND compile framework code
+# This caches ALL dependencies in the Docker layer, avoiding repeated downloads
 RUN cd /jmeter/java \
-    && mvn dependency:go-offline -B \
-    && echo "✅ Maven dependencies pre-downloaded" \
-    || echo "⚠️ Some dependencies may need to be downloaded at runtime"
+    && echo "📦 Downloading Maven dependencies..." \
+    && mvn dependency:resolve dependency:resolve-plugins -B \
+    && echo "🔨 Pre-compiling framework code..." \
+    && mvn test-compile -B \
+    && echo "✅ Maven local repository populated with all dependencies" \
+    && echo "✅ Framework code pre-compiled" \
+    && echo "   Maven dependencies are now cached in Docker layer" \
+    && echo "   Tests downloaded from S3 will use cached dependencies" \
+    && ls -lh /root/.m2/repository/ | head -20
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /entrypoint.sh

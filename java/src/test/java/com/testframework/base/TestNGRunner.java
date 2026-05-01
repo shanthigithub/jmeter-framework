@@ -197,6 +197,46 @@ public abstract class TestNGRunner {
     }
     
     /**
+     * Execute a timed action that returns a value
+     * 
+     * @param actionName Name of the action
+     * @param action Supplier lambda that returns a value
+     * @return The result from the supplier
+     */
+    protected <T> T timedAction(String actionName, java.util.function.Supplier<T> action) {
+        String threadName = Thread.currentThread().getName();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            T result = action.get();
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            // Store transaction data
+            transactions.get(threadName).add(
+                new TransactionData(actionName, startTime, duration, true, null)
+            );
+            
+            // Log like test-runner.js
+            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
+            
+            return result;
+            
+        } catch (Exception e) {
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            // Store failed transaction
+            transactions.get(threadName).add(
+                new TransactionData(actionName, startTime, duration, false, e.getMessage())
+            );
+            
+            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
+            throw e;
+        }
+    }
+    
+    /**
      * Think time (pause between actions - like JMeter)
      */
     protected void thinkTime(int milliseconds) {
@@ -212,6 +252,21 @@ public abstract class TestNGRunner {
      */
     protected void logStep(String stepNumber, String description) {
         System.out.println(String.format("\n📋 %s: %s", stepNumber, description));
+    }
+    
+    /**
+     * Simple log method (alias for easier test writing)
+     */
+    protected void log(String message) {
+        System.out.println(message);
+    }
+    
+    /**
+     * Get environment variable with default value
+     */
+    protected static String getEnv(String name, String defaultValue) {
+        String value = System.getenv(name);
+        return (value != null && !value.isEmpty()) ? value : defaultValue;
     }
     
     /**
