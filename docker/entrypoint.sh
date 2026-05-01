@@ -283,6 +283,14 @@ if [ "${ENABLE_SYNC:-false}" = "true" ]; then
             fi
             
             echo "[SYNC] All containers synchronized - proceeding with test"
+            
+            # Delete signal immediately - no longer needed after reading
+            echo "[SYNC] Cleaning up temporary signal file..."
+            if aws s3 rm "s3://${CONFIG_BUCKET}/${SIGNAL_KEY}" 2>/dev/null; then
+                echo "  ✅ Deleted: s3://${CONFIG_BUCKET}/${SIGNAL_KEY}"
+            else
+                echo "  ⚠️  Could not delete signal (may not have permissions)"
+            fi
             echo ""
             break
         fi
