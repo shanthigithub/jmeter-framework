@@ -18,14 +18,18 @@ import re
 def normalize_csv_path(original_path):
     """
     Convert any local path to container path.
+    IMPORTANT: Replaces spaces with underscores to match entrypoint.sh behavior.
     
     Examples:
         C:/Users/test/data.csv -> /tmp/data.csv
-        ./scripts/SSP_API_Test_Data_3.csv -> /tmp/SSP_API_Test_Data_3.csv
+        ./scripts/SSP_API_Test_Data 3.csv -> /tmp/SSP_API_Test_Data_3.csv
         data/users.csv -> /tmp/users.csv
     """
     # Extract just the filename (without directory)
     filename = os.path.basename(original_path)
+    
+    # Replace spaces with underscores (JMeter CSV parser fails with spaces)
+    filename = filename.replace(' ', '_')
     
     # Return container path
     return f"/tmp/{filename}"

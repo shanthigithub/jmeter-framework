@@ -281,8 +281,11 @@ echo ""
 # Download data file (optional)
 if [ -n "$DATA_FILE_S3" ]; then
     echo "📥 Downloading data file..."
-    # Extract filename from S3 path
-    DATA_FILENAME=$(basename "$DATA_FILE_S3")
+    # Extract filename from S3 path and REMOVE SPACES (JMeter CSV parser fails with spaces)
+    DATA_FILENAME=$(basename "$DATA_FILE_S3" | tr ' ' '_')
+    echo "  [INFO] Original S3 filename: $(basename "$DATA_FILE_S3")"
+    echo "  [INFO] Local filename (spaces removed): ${DATA_FILENAME}"
+    
     if ! download_s3_file "$DATA_FILE_S3" "/tmp/${DATA_FILENAME}"; then
         echo ""
         echo "⚠️  [WARNING] Failed to download data file, but continuing..."
