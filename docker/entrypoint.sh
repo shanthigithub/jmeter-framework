@@ -145,6 +145,44 @@ download_s3_file() {
                 local file_size=$(stat -c%s "${local_path}" 2>/dev/null || stat -f%z "${local_path}" 2>/dev/null || echo "0")
                 echo "  ✅ [SUCCESS] Downloaded ${file_size} bytes to: ${local_path}"
                 ls -lh "${local_path}" | awk '{print "  [FILE INFO] " $0}'
+                
+                # Additional validation for CSV files
+                if [[ "${local_path}" == *.csv ]]; then
+                    echo "  [VALIDATE] Checking CSV file integrity..."
+                    
+                    # Check if file is empty
+                    if [ "$file_size" -eq 0 ]; then
+                        echo "  ❌ [ERROR] CSV file is empty (0 bytes)"
+                        return 1
+                    fi
+                    
+                    # Check if file has at least one line (header)
+                    line_count=$(wc -l < "${local_path}" 2>/dev/null || echo "0")
+                    if [ "$line_count" -eq 0 ]; then
+                        echo "  ❌ [ERROR] CSV file has no lines"
+                        echo "  [DEBUG] First 100 bytes of file:"
+                        head -c 100 "${local_path}" | od -c
+                        return 1
+                    fi
+                    
+                    # Show first line (header) for debugging
+                    echo "  [CSV HEADER] $(head -n 1 "${local_path}")"
+                    echo "  [CSV INFO] File has ${line_count} lines"
+                    
+                    # Check for UTF-8 BOM and remove if present
+                    if [ -f "${local_path}" ]; then
+                        # Check for BOM (EF BB BF in hex)
+                        bom_check=$(head -c 3 "${local_path}" | od -A n -t x1 | tr -d ' ')
+                        if [ "$bom_check" = "efbbbf" ]; then
+                            echo "  ⚠️  [WARNING] UTF-8 BOM detected - removing it"
+                            # Remove BOM by skipping first 3 bytes
+                            tail -c +4 "${local_path}" > "${local_path}.tmp"
+                            mv "${local_path}.tmp" "${local_path}"
+                            echo "  ✅ [FIXED] BOM removed from CSV file"
+                        fi
+                    fi
+                fi
+                
                 return 0
             else
                 echo "  ❌ [ERROR] Download exit code 0 but file not found: ${local_path}"
