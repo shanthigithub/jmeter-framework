@@ -503,21 +503,17 @@ def calculate_containers(num_threads: int) -> int:
     """
     Calculate optimal number of containers based on thread count.
     
-    Rules:
-    - 1-50 threads: 1 container
-    - 51-200 threads: 2 containers
-    - 201-500 threads: 3-5 containers
-    - 501+: Scale at ~100 threads per container
-    """
+    Rule: 1 container per 50 threads (max 50 threads per container)
     
-    if num_threads <= 50:
-        return 1
-    elif num_threads <= 200:
-        return 2
-    elif num_threads <= 500:
-        return math.ceil(num_threads / 100)
-    else:
-        return math.ceil(num_threads / 100)
+    Examples:
+    - 50 threads → 1 container
+    - 51 threads → 2 containers  
+    - 100 threads → 2 containers
+    - 200 threads → 4 containers
+    - 500 threads → 10 containers
+    """
+    THREADS_PER_CONTAINER = 50
+    return max(1, math.ceil(num_threads / THREADS_PER_CONTAINER))
 
 
 def calculate_jvm_args(num_threads: int) -> str:

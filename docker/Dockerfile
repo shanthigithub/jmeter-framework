@@ -213,6 +213,14 @@ RUN chmod +x /usr/local/bin/datadog-forwarder.py
 COPY docker/rewrite-jmx-csvfile-paths.py /usr/local/bin/rewrite-jmx-csvfile-paths.py
 RUN chmod +x /usr/local/bin/rewrite-jmx-csvfile-paths.py
 
+# Copy JMX ThreadGroup partitioning script (divides users among containers)
+COPY docker/inject-threadgroup-partitioning.py /usr/local/bin/inject-threadgroup-partitioning.py
+RUN chmod +x /usr/local/bin/inject-threadgroup-partitioning.py
+
+# Copy JMX CSV partitioning script (adds offset/increment for distributed data access)
+COPY docker/inject-jmx-partitioning.py /usr/local/bin/inject-jmx-partitioning.py
+RUN chmod +x /usr/local/bin/inject-jmx-partitioning.py
+
 # Copy Log4j2 configuration (fixes "package scanning deprecated" warning)
 COPY docker/log4j2.xml /opt/jmeter/bin/log4j2.xml
 

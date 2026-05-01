@@ -315,6 +315,21 @@ if [ "$FILE_EXTENSION" = "jmx" ] && [ -f "$TEST_FILE" ]; then
         echo "  ⚠️  Warning: Could not rewrite JMX CSV paths (will try to proceed)"
     fi
     
+    # Inject ThreadGroup partitioning (divide users among containers)
+    echo "=========================================="
+    echo "[JMX] Injecting ThreadGroup Partitioning"
+    echo "=========================================="
+    echo "ℹ️  Dividing thread count among containers"
+    echo "ℹ️  Container ${CONTAINER_ID:-0} of ${NUM_CONTAINERS:-1}"
+    echo ""
+    
+    if python3 /usr/local/bin/inject-threadgroup-partitioning.py "$TEST_FILE" "${CONTAINER_ID:-0}" "${NUM_CONTAINERS:-1}"; then
+        echo "  ✅ ThreadGroup partitioning injected successfully"
+    else
+        echo "  ⚠️  Warning: Could not inject ThreadGroup partitioning (all containers will run all threads!)"
+    fi
+    echo ""
+    
     # Inject CSV partitioning (offset/increment for distributed execution)
     echo "=========================================="
     echo "[JMX] Injecting CSV Data Partitioning"
