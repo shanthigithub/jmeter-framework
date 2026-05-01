@@ -254,11 +254,12 @@ public abstract class TestNGRunner {
     
     /**
      * Execute a timed action that may throw checked exceptions
+     * Use this version when your action might throw checked exceptions
      * 
      * @param actionName Name of the action
      * @param action Lambda that may throw checked exceptions
      */
-    protected void timedAction(String actionName, ThrowingRunnable action) throws Exception {
+    protected void timedActionWithException(String actionName, ThrowingRunnable action) throws Exception {
         String threadName = Thread.currentThread().getName();
         long startTime = System.currentTimeMillis();
         
@@ -291,12 +292,13 @@ public abstract class TestNGRunner {
     
     /**
      * Execute a timed action that returns a value and may throw checked exceptions
+     * Use this version when your action might throw checked exceptions
      * 
      * @param actionName Name of the action
      * @param action Supplier lambda that may throw checked exceptions
      * @return The result from the supplier
      */
-    protected <T> T timedAction(String actionName, ThrowingSupplier<T> action) throws Exception {
+    protected <T> T timedActionWithException(String actionName, ThrowingSupplier<T> action) throws Exception {
         String threadName = Thread.currentThread().getName();
         long startTime = System.currentTimeMillis();
         
