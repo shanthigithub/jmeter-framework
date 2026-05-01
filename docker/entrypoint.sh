@@ -427,11 +427,8 @@ elif [ "$FILE_EXTENSION" = "java" ]; then
         exit 1
     fi
     
-    # Copy Java test to framework directory
-    echo "[SETUP] Preparing TestNG framework..."
-    mkdir -p /jmeter/java/src/test/java/com/testframework/tests
-    cp "${TEST_FILE}" /jmeter/java/src/test/java/com/testframework/tests/
-    echo "  ✅ Test file copied to framework"
+    # Note: Java test will be copied with correct class name later (before Maven build)
+    # See Java test execution section below for proper copy with ${CLASS_NAME}.java
     echo ""
 fi
 
