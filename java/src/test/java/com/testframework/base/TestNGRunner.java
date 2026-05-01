@@ -204,7 +204,13 @@ public class TestNGRunner {
                     // Apply ramp-up delay
                     if (delay > 0) {
                         System.out.println("⏱️  Ramp-up: Starting User " + user + " after " + delay + "ms delay...");
-                        Thread.sleep(delay);
+                        try {
+                            Thread.sleep(delay);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            System.err.println("User " + user + " ramp-up interrupted");
+                            return;
+                        }
                     }
                     
                     String threadName = "User " + user;
@@ -235,7 +241,13 @@ public class TestNGRunner {
                             if (iteration < iterations && thinkTime > 0) {
                                 System.out.println("👤 User " + user + ": Waiting " + thinkTime + 
                                     "ms before next iteration...");
-                                Thread.sleep(thinkTime);
+                                try {
+                                    Thread.sleep(thinkTime);
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    System.err.println("User " + user + " think time interrupted");
+                                    break; // Exit iteration loop if interrupted
+                                }
                             }
                             
                         } catch (Exception e) {
