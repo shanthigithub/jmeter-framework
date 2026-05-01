@@ -81,6 +81,15 @@ def lambda_handler(event, context):
             
             task_arns = []
             
+            # Calculate threads per container for parallel execution
+            threads_per_container = threads // num_containers if num_containers > 0 else threads
+            
+            print(f"  📊 Thread Distribution:")
+            print(f"     Total Threads: {threads}")
+            print(f"     Containers: {num_containers}")
+            print(f"     Threads per Container: {threads_per_container}")
+            print(f"     Total (distributed): {threads_per_container * num_containers}")
+            
             for container_idx in range(num_containers):
                 # Build simple JMeter command - S3 downloads handled by entrypoint via env vars
                 command = [
@@ -92,6 +101,7 @@ def lambda_handler(event, context):
                     # Distribution properties (for distributed test awareness)
                     '-JcontainerId', str(container_idx),
                     '-JtotalContainers', str(num_containers),
+                    '-JthreadsPerContainer', str(threads_per_container),  # Divided thread count
                 ]
                 
                 # Add data file reference if partitioned (downloaded by entrypoint)
