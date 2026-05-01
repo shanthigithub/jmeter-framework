@@ -722,11 +722,25 @@ elif [ "$FILE_EXTENSION" = "java" ]; then
     # Export test configuration as system properties
     export MAVEN_OPTS="${JVM_ARGS}"
     
+    # Calculate threads per container for distributed execution
+    TOTAL_THREADS=${TOTAL_THREADS:-10}
+    NUM_CONTAINERS=${NUM_CONTAINERS:-1}
+    THREADS_PER_CONTAINER=$((TOTAL_THREADS / NUM_CONTAINERS))
+    
+    echo "=========================================="
+    echo "[THREAD DISTRIBUTION]"
+    echo "=========================================="
+    echo "Total Threads (from JMX): ${TOTAL_THREADS}"
+    echo "Number of Containers: ${NUM_CONTAINERS}"
+    echo "Threads per Container: ${THREADS_PER_CONTAINER}"
+    echo "This Container ID: ${CONTAINER_ID:-0}"
+    echo ""
+    
     # Export environment variables that TestConfig will read
     export APP_BASE_URL="${APP_BASE_URL:-https://example.com}"
     export APP_USERNAME="${APP_USERNAME:-}"
     export APP_PASSWORD="${APP_PASSWORD:-}"
-    export PARALLEL_USERS="${PARALLEL_USERS:-10}"
+    export PARALLEL_USERS="${THREADS_PER_CONTAINER}"
     export ITERATIONS="${ITERATIONS:-1}"
     export THINK_TIME="${THINK_TIME:-2000}"
     export HEALENIUM_SERVER_URL="${HEALENIUM_SERVER_URL:-http://localhost:7878}"

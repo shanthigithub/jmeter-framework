@@ -123,6 +123,9 @@ def lambda_handler(event, context):
                     {'name': 'TEST_SCRIPT_S3', 'value': f's3://{config_bucket}/{test_script}'},
                     # Timeout protection - estimated duration for timeout calculation
                     {'name': 'ESTIMATED_DURATION_SECONDS', 'value': str(estimated_duration)},
+                    # Thread distribution for parallel execution
+                    {'name': 'TOTAL_THREADS', 'value': str(threads)},
+                    {'name': 'NUM_CONTAINERS', 'value': str(num_containers)},
                 ]
                 
                 # Add Datadog configuration if enabled in test config
