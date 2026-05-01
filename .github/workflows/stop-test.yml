@@ -19,8 +19,8 @@ on:
         options:
           - 'false'
           - 'true'
-      cleanup_batch_jobs:
-        description: 'Also terminate AWS Batch jobs'
+      cleanup_ecs_tasks:
+        description: 'Also terminate running ECS tasks'
         required: false
         default: 'true'
         type: choice
@@ -233,49 +233,58 @@ jobs:
           # Wait for confirmations
           sleep 5
       
-      - name: Cleanup AWS Batch jobs
-        if: github.event.inputs.cleanup_batch_jobs == 'true'
+      - name: Stop running ECS tasks
+        if: github.event.inputs.cleanup_ecs_tasks == 'true'
         run: |
-          echo "🧹 Cleaning up AWS Batch jobs..."
+          echo "🧹 Stopping running ECS Fargate tasks..."
           echo ""
           
-          # Get job queue name from CloudFormation
-          JOB_QUEUE=$(aws cloudformation describe-stacks \
-            --stack-name JMeterBatchStack \
-            --query 'Stacks[0].Outputs[?OutputKey==`JobQueueName`].OutputValue' \
+          # Get ECS cluster name from CloudFormation
+          ECS_CLUSTER=$(aws cloudformation describe-stacks \
+            --stack-name JMeterEcsStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
             --output text 2>/dev/null || echo "")
           
-          if [ -z "$JOB_QUEUE" ]; then
-            echo "⚠️  Job queue not found in stack outputs, trying default name..."
-            JOB_QUEUE="JMeterBatchQueue"
+          if [ -z "$ECS_CLUSTER" ]; then
+            echo "⚠️  ECS cluster not found in stack outputs"
+            exit 0
           fi
           
-          echo "Job Queue: $JOB_QUEUE"
+          echo "ECS Cluster: $ECS_CLUSTER"
           echo ""
           
-          # List running and runnable jobs
-          for STATUS in RUNNING RUNNABLE STARTING; do
-            echo "Checking $STATUS jobs..."
+          # List all running tasks in the cluster
+          TASK_ARNS=$(aws ecs list-tasks \
+            --cluster $ECS_CLUSTER \
+            --desired-status RUNNING \
+            --query 'taskArns[]' \
+            --output text)
+          
+          if [ -z "$TASK_ARNS" ]; then
+            echo "✅ No running tasks found"
+            exit 0
+          fi
+          
+          # Count tasks
+          TASK_COUNT=$(echo "$TASK_ARNS" | wc -w)
+          echo "Found $TASK_COUNT running task(s)"
+          echo ""
+          
+          # Stop each task
+          STOPPED=0
+          for TASK_ARN in $TASK_ARNS; do
+            TASK_ID=$(basename $TASK_ARN)
+            echo "Stopping task: $TASK_ID"
             
-            JOBS=$(aws batch list-jobs \
-              --job-queue $JOB_QUEUE \
-              --job-status $STATUS \
-              --query 'jobSummaryList[].jobId' \
-              --output text 2>/dev/null || echo "")
-            
-            if [ ! -z "$JOBS" ]; then
-              for JOB_ID in $JOBS; do
-                echo "  Terminating job: $JOB_ID"
-                aws batch terminate-job \
-                  --job-id $JOB_ID \
-                  --reason "Stopped via GitHub Actions workflow" \
-                  2>/dev/null || echo "    ⚠️  Failed to terminate"
-              done
-            fi
+            aws ecs stop-task \
+              --cluster $ECS_CLUSTER \
+              --task $TASK_ARN \
+              --reason "Stopped via GitHub Actions workflow" \
+              >/dev/null 2>&1 && STOPPED=$((STOPPED + 1)) || echo "  ⚠️  Failed to stop"
           done
           
           echo ""
-          echo "✅ Batch job cleanup complete"
+          echo "✅ Stopped $STOPPED/$TASK_COUNT ECS task(s)"
       
       - name: Summary
         if: always()
@@ -305,15 +314,15 @@ jobs:
           
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [ "${{ github.event.inputs.cleanup_batch_jobs }}" = "true" ]; then
-            echo "**Batch Jobs:** Cleaned up ✅" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.cleanup_ecs_tasks }}" = "true" ]; then
+            echo "**ECS Tasks:** Stopped ✅" >> $GITHUB_STEP_SUMMARY
           else
-            echo "**Batch Jobs:** Not cleaned up (jobs may continue running)" >> $GITHUB_STEP_SUMMARY
+            echo "**ECS Tasks:** Not stopped (tasks may continue running) ⚠️" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- [Step Functions Console](https://console.aws.amazon.com/states/home?region=${{ env.AWS_REGION }}#/statemachines/details/${{ steps.get-outputs.outputs.state_machine }})" >> $GITHUB_STEP_SUMMARY
-          echo "- [Batch Console](https://console.aws.amazon.com/batch/home?region=${{ env.AWS_REGION }}#jobs)" >> $GITHUB_STEP_SUMMARY
+          echo "- [ECS Console](https://console.aws.amazon.com/ecs/v2/clusters?region=${{ env.AWS_REGION }})" >> $GITHUB_STEP_SUMMARY
           echo "- [CloudWatch Logs](https://console.aws.amazon.com/cloudwatch/home?region=${{ env.AWS_REGION }}#logsV2:log-groups)" >> $GITHUB_STEP_SUMMARY
