@@ -237,6 +237,99 @@ public abstract class TestNGRunner {
     }
     
     /**
+     * Functional interface that allows throwing checked exceptions
+     */
+    @FunctionalInterface
+    protected interface ThrowingRunnable {
+        void run() throws Exception;
+    }
+    
+    /**
+     * Functional interface that allows throwing checked exceptions and returns a value
+     */
+    @FunctionalInterface
+    protected interface ThrowingSupplier<T> {
+        T get() throws Exception;
+    }
+    
+    /**
+     * Execute a timed action that may throw checked exceptions
+     * 
+     * @param actionName Name of the action
+     * @param action Lambda that may throw checked exceptions
+     */
+    protected void timedAction(String actionName, ThrowingRunnable action) throws Exception {
+        String threadName = Thread.currentThread().getName();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            action.run();
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            // Store transaction data
+            transactions.get(threadName).add(
+                new TransactionData(actionName, startTime, duration, true, null)
+            );
+            
+            // Log like test-runner.js
+            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
+            
+        } catch (Exception e) {
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            // Store failed transaction
+            transactions.get(threadName).add(
+                new TransactionData(actionName, startTime, duration, false, e.getMessage())
+            );
+            
+            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
+            throw e;
+        }
+    }
+    
+    /**
+     * Execute a timed action that returns a value and may throw checked exceptions
+     * 
+     * @param actionName Name of the action
+     * @param action Supplier lambda that may throw checked exceptions
+     * @return The result from the supplier
+     */
+    protected <T> T timedAction(String actionName, ThrowingSupplier<T> action) throws Exception {
+        String threadName = Thread.currentThread().getName();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            T result = action.get();
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            // Store transaction data
+            transactions.get(threadName).add(
+                new TransactionData(actionName, startTime, duration, true, null)
+            );
+            
+            // Log like test-runner.js
+            System.out.println(String.format("   ✅ [%dms] %s", duration, actionName));
+            
+            return result;
+            
+        } catch (Exception e) {
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            
+            // Store failed transaction
+            transactions.get(threadName).add(
+                new TransactionData(actionName, startTime, duration, false, e.getMessage())
+            );
+            
+            System.out.println(String.format("   ❌ [%dms] %s - %s", duration, actionName, e.getMessage()));
+            throw e;
+        }
+    }
+    
+    /**
      * Think time (pause between actions - like JMeter)
      */
     protected void thinkTime(int milliseconds) {
