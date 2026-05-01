@@ -209,6 +209,10 @@ RUN google-chrome --version \
 COPY docker/datadog-forwarder.py /usr/local/bin/datadog-forwarder.py
 RUN chmod +x /usr/local/bin/datadog-forwarder.py
 
+# Copy JMX path rewriter script
+COPY docker/rewrite-jmx-paths.py /usr/local/bin/rewrite-jmx-paths.py
+RUN chmod +x /usr/local/bin/rewrite-jmx-paths.py
+
 # Copy Log4j2 configuration (fixes "package scanning deprecated" warning)
 COPY docker/log4j2.xml /opt/jmeter/bin/log4j2.xml
 

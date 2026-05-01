@@ -231,9 +231,29 @@ echo ""
 # Download data file (optional)
 if [ -n "$DATA_FILE_S3" ]; then
     echo "📥 Downloading data file..."
-    if ! download_s3_file "$DATA_FILE_S3" "/tmp/data.csv"; then
+    # Extract filename from S3 path
+    DATA_FILENAME=$(basename "$DATA_FILE_S3")
+    if ! download_s3_file "$DATA_FILE_S3" "/tmp/${DATA_FILENAME}"; then
         echo ""
         echo "⚠️  [WARNING] Failed to download data file, but continuing..."
+    else
+        echo "  ✅ Downloaded to: /tmp/${DATA_FILENAME}"
+    fi
+    echo ""
+fi
+
+# Rewrite JMX CSV paths to container paths (for JMX files only)
+if [ "$FILE_EXTENSION" = "jmx" ] && [ -f "$TEST_FILE" ]; then
+    echo "=========================================="
+    echo "[JMX] Rewriting CSV file paths for container"
+    echo "=========================================="
+    echo "ℹ️  Converting local paths to container paths (/tmp/)"
+    echo ""
+    
+    if python3 /usr/local/bin/rewrite-jmx-paths.py "$TEST_FILE"; then
+        echo "  ✅ JMX file updated with container paths"
+    else
+        echo "  ⚠️  Warning: Could not rewrite JMX paths (will try to proceed)"
     fi
     echo ""
 fi
