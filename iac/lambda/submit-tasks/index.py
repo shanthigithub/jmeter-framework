@@ -68,8 +68,18 @@ def lambda_handler(event, context):
             threads = test['testDetails'].get('totalThreads', 0)
             # Get estimated duration for timeout protection
             estimated_duration = test['testDetails'].get('estimatedDurationSeconds', 3600)
-            # Get data file from test config (if exists) - no longer partitioned, entrypoint handles offset/increment
-            data_file_s3 = test.get('dataFile')  # Optional - may be None
+            
+            # Get data file from test config OR auto-detected from JMX
+            # Priority: 1) dataFile from config, 2) dataFiles[0] from jmx-parser
+            data_file_s3 = test.get('dataFile')  # From config (optional)
+            
+            # If not in config, check if jmx-parser auto-detected CSV files
+            if not data_file_s3 and 'dataFiles' in test and test['dataFiles']:
+                # Use first detected CSV file and convert to S3 path
+                csv_filename = test['dataFiles'][0]  # e.g., "data/SSP_API_Test_Data_3.csv"
+                data_file_s3 = f's3://{config_bucket}/{csv_filename}'
+                print(f"  📄 Auto-detected CSV file: {csv_filename} → {data_file_s3}")
+            
             jvm_args = test.get('jvmArgs', '-Xms512m -Xmx2g')
             jmeter_props = test.get('jmeterProperties', {})
             
