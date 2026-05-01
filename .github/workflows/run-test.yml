@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - 'dcp-api-test.json'
+          - 'ssp-api-test.json'
           - 'test-suite.json'
           - 'sureprep-ui-test.json'
           - 'sureprep-ui-test-playwright.json'
