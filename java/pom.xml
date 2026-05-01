@@ -104,6 +104,14 @@
                         <iterations>${iterations}</iterations>
                     </systemPropertyVariables>
                 </configuration>
+                <dependencies>
+                    <!-- Explicitly add TestNG dependency to Surefire -->
+                    <dependency>
+                        <groupId>org.apache.maven.surefire</groupId>
+                        <artifactId>surefire-testng</artifactId>
+                        <version>3.0.0</version>
+                    </dependency>
+                </dependencies>
             </plugin>
 
             <!-- Allure Maven Plugin -->
