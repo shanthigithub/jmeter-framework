@@ -97,6 +97,8 @@ jobs:
           EXECUTION_NAME="${{ github.event.inputs.execution_name }}"
           EXECUTION_ARN="${{ github.event.inputs.execution_arn }}"
           STOP_ALL="${{ github.event.inputs.stop_all }}"
+          HAS_RUNNING="${{ steps.list-executions.outputs.has_running }}"
+          RUNNING_COUNT="${{ steps.list-executions.outputs.count }}"
           
           if [ "$STOP_ALL" = "true" ]; then
             echo "mode=stop_all" >> $GITHUB_OUTPUT
@@ -114,12 +116,27 @@ jobs:
             echo "execution_arn=$EXECUTION_ARN" >> $GITHUB_OUTPUT
             echo "🎯 Mode: Stop specific execution by name"
           else
-            echo "❌ Error: Must provide execution_name, execution_arn, or set stop_all=true"
-            exit 1
+            # No parameters provided - check running executions
+            if [ "$HAS_RUNNING" = "false" ]; then
+              echo "✅ No running executions found - nothing to stop"
+              echo "mode=skip" >> $GITHUB_OUTPUT
+            elif [ "$RUNNING_COUNT" = "1" ]; then
+              # Auto-stop the single running execution
+              EXECUTION_ARN=$(cat running-executions.json | jq -r '.executions[0].executionArn')
+              EXECUTION_NAME=$(cat running-executions.json | jq -r '.executions[0].name')
+              echo "mode=auto_single" >> $GITHUB_OUTPUT
+              echo "execution_arn=$EXECUTION_ARN" >> $GITHUB_OUTPUT
+              echo "🎯 Auto Mode: Found 1 running execution, stopping: $EXECUTION_NAME"
+            else
+              # Multiple running - suggest using stop_all
+              echo "⚠️  Found $RUNNING_COUNT running executions"
+              echo "   Please re-run with stop_all=true or provide specific execution_name"
+              echo "mode=skip" >> $GITHUB_OUTPUT
+            fi
           fi
       
       - name: Stop specific execution
-        if: steps.validate.outputs.mode == 'by_name' || steps.validate.outputs.mode == 'by_arn'
+        if: steps.validate.outputs.mode == 'by_name' || steps.validate.outputs.mode == 'by_arn' || steps.validate.outputs.mode == 'auto_single'
         id: stop-one
         run: |
           EXECUTION_ARN="${{ steps.validate.outputs.execution_arn }}"
@@ -272,11 +289,18 @@ jobs:
             STOPPED="${{ steps.stop-all.outputs.stopped_count }}"
             echo "**Mode:** Stop all executions" >> $GITHUB_STEP_SUMMARY
             echo "**Stopped:** $STOPPED execution(s)" >> $GITHUB_STEP_SUMMARY
-          elif [ "$MODE" = "by_name" ] || [ "$MODE" = "by_arn" ]; then
+          elif [ "$MODE" = "by_name" ] || [ "$MODE" = "by_arn" ] || [ "$MODE" = "auto_single" ]; then
             STOPPED="${{ steps.stop-one.outputs.stopped_count }}"
-            echo "**Mode:** Stop specific execution" >> $GITHUB_STEP_SUMMARY
+            if [ "$MODE" = "auto_single" ]; then
+              echo "**Mode:** Auto-detected single execution" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "**Mode:** Stop specific execution" >> $GITHUB_STEP_SUMMARY
+            fi
             echo "**Execution ARN:** \`${{ steps.validate.outputs.execution_arn }}\`" >> $GITHUB_STEP_SUMMARY
             echo "**Status:** Stopped" >> $GITHUB_STEP_SUMMARY
+          elif [ "$MODE" = "skip" ]; then
+            echo "**Mode:** No action taken" >> $GITHUB_STEP_SUMMARY
+            echo "**Reason:** No running executions or multiple running executions found" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
