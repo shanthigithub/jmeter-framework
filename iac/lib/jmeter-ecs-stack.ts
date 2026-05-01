@@ -465,9 +465,10 @@ export class JMeterEcsStack extends cdk.Stack {
           'testId.$': '$.testId',
           'testType.$': '$.testType',
           'execute.$': '$.execute',
+          'configBucket': config.configBucket,
+          // Pass enableDatadog and datadogSite only if they exist (added by ReadConfig when user enables Datadog)
           'enableDatadog.$': '$.enableDatadog',
           'datadogSite.$': '$.datadogSite',
-          'configBucket': config.configBucket,
         }),
         resultSelector: {
           'Payload.$': '$.Payload',

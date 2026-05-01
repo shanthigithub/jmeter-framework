@@ -69,8 +69,12 @@ def lambda_handler(event, context):
         file_content = response['Body'].read().decode('utf-8')
         
         # Detect file type and parse accordingly
-        if test_script.lower().endswith(('.js', '.py', '.java')):
-            # Browser test script (Playwright JavaScript/Python or TestNG Java)
+        if test_script.lower().endswith('.java'):
+            # TestNG Java test
+            print(f"☕ Detected TestNG Java test: {test_script}")
+            config = parse_testng_java(file_content, test_script, property_overrides)
+        elif test_script.lower().endswith(('.js', '.py')):
+            # Browser test script (Playwright JavaScript/Python)
             print(f"🎭 Detected browser test script: {test_script}")
             config = parse_playwright_script(file_content, test_script, property_overrides)
         elif test_script.lower().endswith('.jmx'):
@@ -180,6 +184,89 @@ def parse_playwright_script(script_content: str, test_script: str, property_over
     }
     
     print(f"✅ Playwright script parsed: {parallel_users} users, {iterations} iterations, {num_containers} container(s)")
+    return result
+
+
+def parse_testng_java(script_content: str, test_script: str, property_overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parse TestNG Java test files.
+    
+    Extracts configuration from:
+    - @Test annotations (invocationCount, threadPoolSize)
+    - testng.xml file references
+    - Parallel test configuration
+    """
+    print(f"☕ Parsing TestNG Java file: {test_script}")
+    
+    parallel_users = 5  # Default
+    iterations = 1  # Default
+    thread_pool_size = 1
+    invocation_count = 1
+    
+    # Look for @Test annotation with threadPoolSize and invocationCount
+    # Pattern: @Test(invocationCount = N, threadPoolSize = M)
+    test_annotation = re.search(
+        r'@Test\s*\([^)]*\)',
+        script_content,
+        re.MULTILINE
+    )
+    
+    if test_annotation:
+        annotation_text = test_annotation.group(0)
+        print(f"  └─ Found @Test annotation: {annotation_text[:100]}...")
+        
+        # Extract threadPoolSize
+        thread_pool_match = re.search(r'threadPoolSize\s*=\s*(\d+)', annotation_text)
+        if thread_pool_match:
+            thread_pool_size = int(thread_pool_match.group(1))
+            print(f"  └─ Found threadPoolSize: {thread_pool_size}")
+        
+        # Extract invocationCount
+        invocation_match = re.search(r'invocationCount\s*=\s*(\d+)', annotation_text)
+        if invocation_match:
+            invocation_count = int(invocation_match.group(1))
+            print(f"  └─ Found invocationCount: {invocation_count}")
+    
+    # For TestNG, parallel users = threadPoolSize
+    parallel_users = thread_pool_size
+    iterations = invocation_count
+    
+    # Also check for parallel setting in code comments or configuration
+    parallel_comment = re.search(r'//.*parallel.*?(\d+)', script_content, re.IGNORECASE)
+    if parallel_comment:
+        try:
+            commented_parallel = int(parallel_comment.group(1))
+            if commented_parallel > parallel_users:
+                parallel_users = commented_parallel
+                print(f"  └─ Found parallel users in comment: {parallel_users}")
+        except:
+            pass
+    
+    # Calculate containers using the same logic as JMeter
+    num_containers = calculate_containers(parallel_users)
+    print(f"📦 Calculated containers: {num_containers} (based on {parallel_users} parallel users)")
+    
+    # Calculate JVM args based on thread count
+    jvm_args = calculate_jvm_args(parallel_users)
+    
+    result = {
+        'numOfContainers': num_containers,
+        'jvmArgs': jvm_args,
+        'jmeterProperties': property_overrides,
+        'testDetails': {
+            'scriptType': 'testng',
+            'scriptFile': test_script,
+            'parallelUsers': parallel_users,
+            'threadPoolSize': thread_pool_size,
+            'invocationCount': invocation_count,
+            'iterations': iterations,
+            'totalThreads': parallel_users,
+            'estimatedDurationSeconds': 300,  # Default 5 minutes for browser tests
+            'note': 'TestNG Java test - configuration extracted from @Test annotation'
+        }
+    }
+    
+    print(f"✅ TestNG test parsed: {parallel_users} users ({thread_pool_size} threads × {invocation_count} iterations), {num_containers} container(s)")
     return result
 
 

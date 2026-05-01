@@ -98,11 +98,14 @@ def lambda_handler(event, context):
             
             # Override Datadog setting if workflow input says yes
             # Workflow input takes precedence over config file
+            # ALWAYS set enableDatadog and datadogSite (required for Step Functions JSONPath)
             if enable_datadog_from_workflow:
                 test['enableDatadog'] = True
-                if 'datadogSite' not in test:
-                    test['datadogSite'] = 'datadoghq.com'  # Default site
+                test['datadogSite'] = test.get('datadogSite', 'datadoghq.com')
                 print(f"  ✅ Datadog enabled for test: {test['testId']}")
+            else:
+                test['enableDatadog'] = False
+                test['datadogSite'] = 'datadoghq.com'  # Default even when disabled
             
             # Note: numOfContainers, threads, duration will be auto-extracted by JMX Parser
             # They are optional in the config and will be added later in the pipeline
