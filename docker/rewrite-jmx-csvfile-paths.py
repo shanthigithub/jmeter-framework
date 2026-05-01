@@ -18,34 +18,25 @@ import re
 def normalize_csv_path(original_path):
     """
     Convert any local path to container path.
-    IMPORTANT: 
-    - Replaces spaces with underscores to match entrypoint.sh behavior
-    - Adds container partition suffix (-0, -1, etc.) for multi-container tests
+    
+    NEW APPROACH (Runtime Partitioning):
+    - All containers download the SAME CSV file with ORIGINAL filename
+    - NO space replacement - keeps filename exactly as in S3
+    - NO container suffix - all containers use same file
+    - inject-jmx-partitioning.py adds offset/increment to JMX at runtime
+    - Each container reads different rows based on offset/increment
     
     Examples:
-        C:/Users/test/data.csv -> /tmp/data-0.csv (container 0)
-        ./scripts/SSP_API_Test_Data 3.csv -> /tmp/SSP_API_Test_Data_3-0.csv (container 0)
-        data/users.csv -> /tmp/users-1.csv (container 1)
+        C:/Users/test/data.csv -> /tmp/data.csv
+        ./scripts/SSP_API_Test_Data 3.csv -> /tmp/SSP_API_Test_Data 3.csv (KEEPS SPACE!)
+        data/users.csv -> /tmp/users.csv
     """
     # Extract just the filename (without directory)
     filename = os.path.basename(original_path)
     
-    # Replace spaces with underscores (JMeter CSV parser fails with spaces)
-    filename = filename.replace(' ', '_')
-    
-    # Add container partition suffix for multi-container CSV partitioning
-    # The JMX parser partitions CSV files as: data-0.csv, data-1.csv, etc.
-    container_id = os.environ.get('CONTAINER_ID', '0')
-    
-    # Split filename into name and extension
-    if '.' in filename:
-        name, ext = filename.rsplit('.', 1)
-        filename_with_partition = f"{name}-{container_id}.{ext}"
-    else:
-        filename_with_partition = f"{filename}-{container_id}"
-    
-    # Return container path
-    return f"/tmp/{filename_with_partition}"
+    # Return container path with ORIGINAL filename (no modifications)
+    # This matches the S3 file exactly when entrypoint downloads it
+    return f"/tmp/{filename}"
 
 
 def rewrite_jmx_csv_paths(jmx_file, dry_run=False):
