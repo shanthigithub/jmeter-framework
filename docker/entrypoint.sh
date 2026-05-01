@@ -303,11 +303,21 @@ if [ "$FILE_EXTENSION" = "jmx" ] && [ -f "$TEST_FILE" ]; then
     echo "ℹ️  Converting local CSV paths to container paths (/tmp/)"
     echo ""
     
+    # List all CSV files in /tmp before rewriting
+    echo "[JMX] CSV files in /tmp before JMX rewrite:"
+    ls -lh /tmp/*.csv 2>/dev/null || echo "  (no CSV files found)"
+    echo ""
+    
     if python3 /usr/local/bin/rewrite-jmx-csvfile-paths.py "$TEST_FILE"; then
         echo "  ✅ JMX file updated with container paths"
     else
         echo "  ⚠️  Warning: Could not rewrite JMX CSV paths (will try to proceed)"
     fi
+    
+    # Show what the JMX file now references
+    echo ""
+    echo "[JMX] CSV references in JMX file after rewrite:"
+    grep -A 1 'name="filename"' "$TEST_FILE" | grep -v "^--$" || echo "  (no CSV references found)"
     echo ""
 fi
 
