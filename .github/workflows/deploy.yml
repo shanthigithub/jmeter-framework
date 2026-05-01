@@ -41,6 +41,7 @@ jobs:
             docker:
               - 'docker/**'
               - 'lib/**'
+              - 'java/**'
             lambda:
               - 'iac/lambda/**'
             infra:
