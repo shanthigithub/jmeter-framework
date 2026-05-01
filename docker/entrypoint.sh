@@ -314,9 +314,22 @@ if [ "$FILE_EXTENSION" = "jmx" ] && [ -f "$TEST_FILE" ]; then
         echo "  ⚠️  Warning: Could not rewrite JMX CSV paths (will try to proceed)"
     fi
     
+    # Inject CSV partitioning (offset/increment for distributed execution)
+    echo "=========================================="
+    echo "[JMX] Injecting CSV Data Partitioning"
+    echo "=========================================="
+    echo "ℹ️  Adding offset/increment for distributed data access"
+    echo ""
+    
+    if python3 /usr/local/bin/inject-jmx-partitioning.py "$TEST_FILE" "${CONTAINER_ID:-0}" "${NUM_CONTAINERS:-1}"; then
+        echo "  ✅ CSV partitioning injected successfully"
+    else
+        echo "  ⚠️  Warning: Could not inject CSV partitioning (will use sequential access)"
+    fi
+    
     # Show what the JMX file now references
     echo ""
-    echo "[JMX] CSV references in JMX file after rewrite:"
+    echo "[JMX] CSV references in JMX file after all modifications:"
     grep -A 1 'name="filename"' "$TEST_FILE" | grep -v "^--$" || echo "  (no CSV references found)"
     echo ""
     
