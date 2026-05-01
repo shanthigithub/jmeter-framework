@@ -344,22 +344,7 @@ export class JMeterEcsStack extends cdk.Stack {
       },
     });
 
-    // 2. Partition Data - splits CSV files for parallel processing
-    const partitionDataFn = new lambda.Function(this, 'PartitionDataFn', {
-      functionName: 'jmeter-ecs-partition-data',
-      runtime: lambda.Runtime.PYTHON_3_12,
-      architecture: lambda.Architecture.ARM_64,
-      handler: 'index.lambda_handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'partition-data')),
-      role: lambdaRole,
-      memorySize: config.lambda.memoryMB,
-      timeout: cdk.Duration.seconds(config.lambda.timeoutSeconds.partitionData),
-      environment: {
-        CONFIG_BUCKET: config.configBucket,
-      },
-    });
-
-    // 3. Submit Tasks - launches ECS Fargate tasks
+    // 2. Submit Tasks - launches ECS Fargate tasks
     const submitTasksFn = new lambda.Function(this, 'SubmitTasksFn', {
       functionName: 'jmeter-ecs-submit-tasks',
       runtime: lambda.Runtime.PYTHON_3_12,
@@ -485,21 +470,6 @@ export class JMeterEcsStack extends cdk.Stack {
     const transformParsedTests = new sfn.Pass(this, 'TransformParsedTests', {
       parameters: {
         'tests.$': '$.testsWithConfig[*].Payload',
-        'runId.$': '$.runId',
-      },
-    });
-
-    // Task: Partition Data (optional - only if dataFiles exist)
-    const partitionDataTask = new tasks.LambdaInvoke(this, 'PartitionData', {
-      lambdaFunction: partitionDataFn,
-      payload: sfn.TaskInput.fromJsonPathAt('$'),
-      resultPath: '$.partitionResult',
-    });
-
-    // Transform partitioned data back to root level for submit-tasks
-    const transformPartitionedData = new sfn.Pass(this, 'TransformPartitionedData', {
-      parameters: {
-        'tests.$': '$.partitionResult.Payload.tests',
         'runId.$': '$.runId',
       },
     });

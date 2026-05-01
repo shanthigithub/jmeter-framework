@@ -40,8 +40,7 @@ export const config = {
     architecture: 'ARM_64' as const,  // 20% cheaper than x86
     memoryMB: 512,
     timeoutSeconds: {
-      readConfig: 60,        // 1 minute
-      partitionData: 300,    // 5 minutes
+      readConfig: 60, // 1 minute
       submitTasks: 300,      // 5 minutes
       checkTasks: 30,        // 30 seconds (fast check only)
       mergeResults: 600,     // 10 minutes (result aggregation can be slow)

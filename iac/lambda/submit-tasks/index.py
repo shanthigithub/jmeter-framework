@@ -139,18 +139,11 @@ def lambda_handler(event, context):
                 ]
                 
                 # Add Datadog configuration if enabled in test config
-                print(f"🔍 [DEBUG-SUBMITTASKS] Checking Datadog flag for container {container_idx}...")
-                print(f"🔍 [DEBUG-SUBMITTASKS] test.get('enableDatadog'): {test.get('enableDatadog', 'NOT_PRESENT')}")
-                print(f"🔍 [DEBUG-SUBMITTASKS] test keys: {list(test.keys())}")
-                
+                # Add Datadog configuration if enabled in test config
                 if test.get('enableDatadog', False):
                     environment.append({'name': 'ENABLE_DATADOG_METRICS', 'value': 'true'})
-                    # DD_SITE defaults to datadoghq.com in test config or can be overridden
                     dd_site = test.get('datadogSite', 'datadoghq.com')
                     environment.append({'name': 'DD_SITE', 'value': dd_site})
-                    print(f"    📊 [DEBUG-SUBMITTASKS] Datadog ENABLED - Adding env vars: ENABLE_DATADOG_METRICS=true, DD_SITE={dd_site}")
-                else:
-                    print(f"    ⚠️  [DEBUG-SUBMITTASKS] Datadog DISABLED - enableDatadog is False or not present")
                 
                 # Add data file S3 path if exists (entrypoint will download and partition using offset/increment)
                 if data_file_s3:
