@@ -161,6 +161,8 @@ jobs:
           npx cdk synth
       
       - name: CDK Deploy
+        env:
+          IMAGE_TAG: ${{ github.sha }}
         run: |
           cd iac
           npx cdk deploy --require-approval never

@@ -272,8 +272,11 @@ export class JMeterEcsStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Get image tag from environment variable or use latest
+    const imageTag = process.env.IMAGE_TAG || 'latest';
+    
     apiTaskDefinition.addContainer('jmeter', {
-      image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
+      image: ecs.ContainerImage.fromEcrRepository(repository, imageTag),
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'jmeter-api',
         logGroup: apiLogGroup,
@@ -306,7 +309,7 @@ export class JMeterEcsStack extends cdk.Stack {
     });
 
     browserTaskDefinition.addContainer('jmeter', {
-      image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
+      image: ecs.ContainerImage.fromEcrRepository(repository, imageTag),
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'jmeter-browser',
         logGroup: browserLogGroup,
