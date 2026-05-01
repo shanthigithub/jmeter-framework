@@ -496,6 +496,14 @@ export class JMeterEcsStack extends cdk.Stack {
       resultPath: '$.partitionResult',
     });
 
+    // Transform partitioned data back to root level for submit-tasks
+    const transformPartitionedData = new sfn.Pass(this, 'TransformPartitionedData', {
+      parameters: {
+        'tests.$': '$.partitionResult.Payload.tests',
+        'runId.$': '$.runId',
+      },
+    });
+
     // Task: Submit Tasks (ECS)
     const submitTasksTask = new tasks.LambdaInvoke(this, 'SubmitTasks', {
       lambdaFunction: submitTasksFn,
@@ -580,6 +588,7 @@ export class JMeterEcsStack extends cdk.Stack {
       .next(parseJmxTask)
       .next(transformParsedTests)
       .next(partitionDataTask)
+      .next(transformPartitionedData)
       .next(submitTasksTask)
       .next(waitForReadyTask)  // Synchronize containers before starting test
       .next(checkTasksTask);

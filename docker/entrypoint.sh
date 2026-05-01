@@ -319,6 +319,60 @@ if [ "$FILE_EXTENSION" = "jmx" ] && [ -f "$TEST_FILE" ]; then
     echo "[JMX] CSV references in JMX file after rewrite:"
     grep -A 1 'name="filename"' "$TEST_FILE" | grep -v "^--$" || echo "  (no CSV references found)"
     echo ""
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # ENHANCED DEBUG: Verify CSV files actually exist before JMeter runs
+    # ═══════════════════════════════════════════════════════════════════
+    echo "=========================================="
+    echo "[DEBUG] CSV File Verification"
+    echo "=========================================="
+    echo ""
+    
+    # Extract CSV filenames from JMX
+    echo "[DEBUG] 1. CSV files referenced in JMX:"
+    CSV_FILES=$(grep -A 1 'name="filename"' "$TEST_FILE" | grep '<stringProp' | sed 's/.*<stringProp[^>]*>//; s/<\/stringProp>.*//')
+    if [ -n "$CSV_FILES" ]; then
+        echo "$CSV_FILES" | while read -r csv_path; do
+            echo "  📄 JMX references: ${csv_path}"
+        done
+    else
+        echo "  ⚠️  No CSV files found in JMX"
+    fi
+    echo ""
+    
+    # List ALL files in /tmp
+    echo "[DEBUG] 2. All files in /tmp directory:"
+    ls -lah /tmp/ 2>/dev/null || echo "  (cannot list /tmp)"
+    echo ""
+    
+    # Check each CSV file exists and is readable
+    echo "[DEBUG] 3. CSV file existence check:"
+    if [ -n "$CSV_FILES" ]; then
+        echo "$CSV_FILES" | while read -r csv_path; do
+            if [ -f "$csv_path" ]; then
+                file_size=$(stat -c%s "$csv_path" 2>/dev/null || echo "unknown")
+                echo "  ✅ EXISTS: ${csv_path} (${file_size} bytes)"
+                
+                # Show first 3 lines
+                echo "     First 3 lines:"
+                head -n 3 "$csv_path" | while read -r line; do
+                    echo "       ${line}"
+                done
+            else
+                echo "  ❌ MISSING: ${csv_path}"
+                
+                # Try to find similar files
+                filename=$(basename "$csv_path")
+                echo "     Looking for similar files with name: ${filename}"
+                find /tmp -name "*${filename}*" 2>/dev/null | while read -r found; do
+                    echo "       Found: ${found}"
+                done
+            fi
+            echo ""
+        done
+    fi
+    echo "=========================================="
+    echo ""
 fi
 
 echo "✅ [SUCCESS] All required downloads complete"
